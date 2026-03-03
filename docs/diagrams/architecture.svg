@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 879.75225 1276.9" width="879.75225" height="1276.9" style="--bg:#FFFFFF;--fg:#27272A;background:var(--bg)">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap');
+  text { font-family: 'Inter', system-ui, sans-serif; }
+  svg {
+    /* Derived from --bg and --fg (overridable via --line, --accent, etc.) */
+    --_text:          var(--fg);
+    --_text-sec:      var(--muted, color-mix(in srgb, var(--fg) 60%, var(--bg)));
+    --_text-muted:    var(--muted, color-mix(in srgb, var(--fg) 40%, var(--bg)));
+    --_text-faint:    color-mix(in srgb, var(--fg) 25%, var(--bg));
+    --_line:          var(--line, color-mix(in srgb, var(--fg) 50%, var(--bg)));
+    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) 85%, var(--bg)));
+    --_node-fill:     var(--surface, color-mix(in srgb, var(--fg) 3%, var(--bg)));
+    --_node-stroke:   var(--border, color-mix(in srgb, var(--fg) 20%, var(--bg)));
+    --_group-fill:    var(--bg);
+    --_group-hdr:     color-mix(in srgb, var(--fg) 5%, var(--bg));
+    --_inner-stroke:  color-mix(in srgb, var(--fg) 12%, var(--bg));
+    --_key-badge:     color-mix(in srgb, var(--fg) 10%, var(--bg));
+  }
+</style>
+<defs>
+  <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+    <polygon points="0 0, 8 2.5, 0 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+  <marker id="arrowhead-start" markerWidth="8" markerHeight="5" refX="1" refY="2.5" orient="auto-start-reverse">
+    <polygon points="8 0, 0 2.5, 8 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+</defs>
+<g class="subgraph" data-id="UI" data-label="Web UI  •  :8420">
+  <rect x="185.23199999999997" y="40" width="171.762" height="267.6" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="185.23199999999997" y="40" width="171.762" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="197.23199999999997" y="54" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Web UI  •  :8420</text>
+</g>
+<g class="subgraph" data-id="AGENT" data-label="CV Zero Claw Agent">
+  <rect x="162.40799999999996" y="423.90000000000003" width="217.41" height="238.70000000000002" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="162.40799999999996" y="423.90000000000003" width="217.41" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="174.40799999999996" y="437.90000000000003" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">CV Zero Claw Agent</text>
+</g>
+<g class="subgraph" data-id="TOOLS" data-label="Tool Layer">
+  <rect x="271.11299999999994" y="710.6000000000001" width="331.23" height="267.6" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="271.11299999999994" y="710.6000000000001" width="331.23" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="283.11299999999994" y="724.6000000000001" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Tool Layer</text>
+</g>
+<g class="subgraph" data-id="MODELS" data-label="Model Layer">
+  <rect x="40" y="1026.2" width="230.007" height="210.70000000000002" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="40" y="1026.2" width="230.007" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="52" y="1040.2" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Model Layer</text>
+</g>
+<g class="subgraph" data-id="DATA" data-label="Data Sources">
+  <rect x="298.00699999999995" y="1026.2" width="178.43099999999998" height="210.70000000000002" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="298.00699999999995" y="1026.2" width="178.43099999999998" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="310.00699999999995" y="1040.2" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Data Sources</text>
+</g>
+<polyline class="edge" data-from="UI" data-to="AGENT" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="WebSocket /ws/chat" points="271.11299999999994,307.6 271.11299999999994,423.90000000000003" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="AGENT" data-to="TOOLS" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="271.11299999999994,662.6 271.11299999999994,710.6000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="TOOLS" data-to="MODELS" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="271.11299999999994,978.2000000000002 271.11299999999994,1014.2 155.0035,1014.2 155.0035,1026.2" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="TOOLS" data-to="DATA" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="271.11299999999994,978.2000000000002 271.11299999999994,1014.2 387.22249999999997,1014.2 387.22249999999997,1026.2" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="KG" data-to="VAULT_FS" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="568.8249999999999,773.0500000000002 602.343,773.0500000000002 783.95025,773.0500000000002 783.95025,798.2750000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="SPEC" data-to="SPECS_FS" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="586.343,816.7250000000001 602.343,816.7250000000001 644.34625,829.95 644.34625,1026.2" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="ORCH" data-to="HW" data-style="solid" data-arrow-start="true" data-arrow-end="true" points="217.16699999999997,561.7 217.16699999999997,609.7" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)" />
+<g class="edge-label" data-from="UI" data-to="AGENT" data-label="WebSocket /ws/chat">
+  <rect x="214.61299999999997" y="350.6" width="112.69000000000001" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="270.95799999999997" y="365.75" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">WebSocket /ws/chat</text>
+</g>
+<g class="node" data-id="VAULT_FS" data-label="VAULT_FS" data-shape="rectangle">
+  <rect x="728.14825" y="798.2750000000001" width="111.60399999999998" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="783.95025" y="816.7250000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">VAULT_FS</text>
+</g>
+<g class="node" data-id="SPECS_FS" data-label="SPECS_FS" data-shape="rectangle">
+  <rect x="588.54425" y="1026.2" width="111.60399999999998" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="644.34625" y="1044.65" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">SPECS_FS</text>
+</g>
+<g class="node" data-id="CHAT" data-label="💬 Chat" data-shape="rectangle">
+  <rect x="201.23199999999997" y="84" width="85.66900000000001" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="244.06649999999996" y="102.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">💬 Chat</text>
+</g>
+<g class="node" data-id="VAULT" data-label="📚 Vault Viewer" data-shape="rectangle">
+  <rect x="201.23199999999997" y="140.9" width="132.352" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="267.40799999999996" y="159.35000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">📚 Vault Viewer</text>
+</g>
+<g class="node" data-id="SPECS" data-label="📄 Spec Viewer" data-shape="rectangle">
+  <rect x="201.23199999999997" y="197.8" width="133.834" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="268.149" y="216.25" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">📄 Spec Viewer</text>
+</g>
+<g class="node" data-id="DIGESTS" data-label="📰 Digest Viewer" data-shape="rectangle">
+  <rect x="201.23199999999997" y="254.70000000000002" width="139.762" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="271.11299999999994" y="273.15000000000003" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">📰 Digest Viewer</text>
+</g>
+<g class="node" data-id="ORCH" data-label="ORCH" data-shape="rectangle">
+  <rect x="178.40799999999996" y="524.8000000000001" width="77.518" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="217.16699999999997" y="543.2500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">ORCH</text>
+</g>
+<g class="node" data-id="langchain" data-label="langchain" data-shape="rectangle">
+  <rect x="264.06999999999994" y="467.90000000000003" width="99.748" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="313.94399999999996" y="486.35" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">langchain</text>
+</g>
+<g class="node" data-id="HW" data-label="HW" data-shape="rectangle">
+  <rect x="186.18849999999998" y="609.7" width="61.956999999999994" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="217.16699999999997" y="628.1500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">HW</text>
+</g>
+<g class="node" data-id="llmfit" data-label="llmfit" data-shape="rectangle">
+  <rect x="178.40799999999996" y="467.90000000000003" width="65.66199999999999" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="211.23899999999995" y="486.35" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">llmfit</text>
+</g>
+<g class="node" data-id="VIS" data-label="VIS" data-shape="rectangle">
+  <rect x="287.11299999999994" y="754.6000000000001" width="62.69799999999999" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="318.46199999999993" y="773.0500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">VIS</text>
+</g>
+<g class="node" data-id="Ollama" data-label="Ollama" data-shape="rectangle">
+  <rect x="369.8109999999999" y="754.6000000000001" width="80.482" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="410.0519999999999" y="773.0500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Ollama</text>
+</g>
+<g class="node" data-id="PAPER" data-label="PAPER" data-shape="rectangle">
+  <rect x="287.11299999999994" y="798.2750000000001" width="86.41" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="330.3179999999999" y="816.7250000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">PAPER</text>
+</g>
+<g class="node" data-id="ArXiv" data-label="ArXiv" data-shape="rectangle">
+  <rect x="393.5229999999999" y="798.2750000000001" width="76.036" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="431.54099999999994" y="816.7250000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">ArXiv</text>
+</g>
+<g class="node" data-id="EQ" data-label="EQ" data-shape="rectangle">
+  <rect x="287.11299999999994" y="868.4000000000001" width="60" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="317.11299999999994" y="886.8500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">EQ</text>
+</g>
+<g class="node" data-id="Extractor" data-label="Extractor" data-shape="rectangle">
+  <rect x="367.11299999999994" y="868.4000000000001" width="98.266" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="416.2459999999999" y="886.8500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Extractor</text>
+</g>
+<g class="node" data-id="KG" data-label="KG" data-shape="rectangle">
+  <rect x="508.82499999999993" y="754.6000000000001" width="60" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="538.8249999999999" y="773.0500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">KG</text>
+</g>
+<g class="node" data-id="Graph" data-label="Graph" data-shape="rectangle">
+  <rect x="287.11299999999994" y="925.3000000000002" width="79" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="326.61299999999994" y="943.7500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Graph</text>
+</g>
+<g class="node" data-id="SPEC" data-label="SPEC" data-shape="rectangle">
+  <rect x="508.82499999999993" y="798.2750000000001" width="77.518" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="547.584" y="816.7250000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">SPEC</text>
+</g>
+<g class="node" data-id="Generator" data-label="Generator" data-shape="rectangle">
+  <rect x="386.11299999999994" y="925.3000000000002" width="102.712" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="437.46899999999994" y="943.7500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Generator</text>
+</g>
+<g class="node" data-id="OLLAMA" data-label="OLLAMA" data-shape="rectangle">
+  <rect x="156.482" y="1127.1000000000001" width="97.525" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="205.24450000000002" y="1145.5500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">OLLAMA</text>
+</g>
+<g class="node" data-id="qwen2" data-label="qwen2" data-shape="rectangle">
+  <rect x="56" y="1127.1000000000001" width="80.482" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="96.241" y="1145.5500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">qwen2</text>
+</g>
+<g class="node" data-id="MLX" data-label="MLX" data-shape="rectangle">
+  <rect x="56" y="1070.2" width="70.849" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="91.4245" y="1088.65" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">MLX</text>
+</g>
+<g class="node" data-id="Apple" data-label="Apple" data-shape="rectangle">
+  <rect x="146.849" y="1070.2" width="76.036" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="184.867" y="1088.65" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Apple</text>
+</g>
+<g class="node" data-id="OLLAMA2" data-label="OLLAMA2" data-shape="rectangle">
+  <rect x="56" y="1184" width="104.93499999999999" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="108.4675" y="1202.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">OLLAMA2</text>
+</g>
+<g class="node" data-id="ARXIV" data-label="ArXiv" data-shape="rectangle">
+  <rect x="314.00699999999995" y="1070.2" width="76.036" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="352.025" y="1088.65" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">ArXiv</text>
+</g>
+<g class="node" data-id="PWC" data-label="Papers With Code" data-shape="rectangle">
+  <rect x="314.00699999999995" y="1184" width="146.43099999999998" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="387.22249999999997" y="1202.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Papers With Code</text>
+</g>
+<g class="node" data-id="SS" data-label="Semantic Scholar" data-shape="rectangle">
+  <rect x="314.00699999999995" y="1127.1000000000001" width="144.949" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="386.4815" y="1145.5500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Semantic Scholar</text>
+</g>
+</svg>

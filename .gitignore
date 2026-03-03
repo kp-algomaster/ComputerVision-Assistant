@@ -12,3 +12,4 @@ output/specs/*.md
 output/digests/*.md
 vault/**/*.md
 !vault/README.md
+node_modules/

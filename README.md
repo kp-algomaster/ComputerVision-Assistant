@@ -5,45 +5,36 @@ An autonomous Computer Vision research agent powered by [ZeroClaw](https://githu
 ## Features
 
 - **Vision Model Integration** — Run Ollama models (Qwen2.5-VL, LLaVA, etc.) and MLX-accelerated models for CV tasks
+- **Hardware-Aware Model Selection** — Uses [llmfit](https://github.com/AlexsJones/llmfit) at startup to pick the best locally-runnable model for your hardware
 - **Research Monitor** — Auto-tracks ArXiv, Papers With Code, and Semantic Scholar for latest CV research
 - **Weekly Magazine** — Generates curated weekly digest/blog of new CV breakthroughs
 - **Knowledge Graphs** — Builds Obsidian-compatible knowledge vaults linking papers, methods, datasets, and concepts
 - **Paper → Spec Pipeline** — Extracts equations, architectures, and key findings from papers into `spec.md` files for spec-driven development
-- **Secure Local Access** — Uses ZeroClaw for sandboxed file system and internet access
+- **Web UI** — FastAPI + WebSocket chat interface at `http://localhost:8420`
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│               CV Zero Claw Agent                    │
-├─────────────────────────────────────────────────────┤
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
-│  │ Research  │  │Knowledge │  │   Spec Generator │  │
-│  │ Monitor   │  │  Graph   │  │   (paper→spec)   │  │
-│  └────┬─────┘  └────┬─────┘  └────────┬─────────┘  │
-│       │              │                 │             │
-│  ┌────┴──────────────┴─────────────────┴─────────┐  │
-│  │            Tool Layer (ZeroClaw)               │  │
-│  │  vision │ paper_fetch │ equation │ kg │ spec   │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       │                             │
-│  ┌────────────────────┴──────────────────────────┐  │
-│  │         Model Layer                           │  │
-│  │  Ollama (Qwen2.5-VL) │ MLX (Apple Silicon)   │  │
-│  └───────────────────────────────────────────────┘  │
-├─────────────────────────────────────────────────────┤
-│         ZeroClaw Runtime (Rust + LangGraph)         │
-└─────────────────────────────────────────────────────┘
-```
+![System Architecture](docs/diagrams/architecture.svg)
+
+## Research → Knowledge Pipeline
+
+![Research Pipeline](docs/diagrams/research_pipeline.svg)
+
+## Hardware-Aware Model Selection
+
+![Model Selection](docs/diagrams/model_selection.svg)
+
+> Diagrams rendered with [beautiful-mermaid](https://github.com/lukilabs/beautiful-mermaid) (catppuccin-mocha theme).
+> Regenerate: `node scripts/generate_diagrams.mjs`
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.11+
-- [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) installed (`brew install zeroclaw`)
 - [Ollama](https://ollama.ai) running locally with a vision model
 - macOS with Apple Silicon (for MLX acceleration, optional)
+- [llmfit](https://github.com/AlexsJones/llmfit) for hardware-aware model selection (optional): `brew install llmfit`
 
 ### Setup
 
@@ -112,7 +103,8 @@ cv-agent chat
 │   │   ├── paper_fetch.py    # ArXiv/paper fetching
 │   │   ├── equation_extract.py  # Equation extraction
 │   │   ├── knowledge_graph.py   # Knowledge graph builder
-│   │   └── spec_generator.py    # spec.md generation
+│   │   ├── spec_generator.py    # spec.md generation
+│   │   └── hardware_probe.py    # llmfit hardware detection
 │   ├── research/             # Research monitoring
 │   │   ├── monitor.py        # Source monitoring
 │   │   ├── digest.py         # Weekly digest generator
@@ -120,6 +112,8 @@ cv-agent chat
 │   └── knowledge/            # Knowledge management
 │       ├── graph.py          # Graph core logic
 │       └── obsidian.py       # Obsidian vault integration
+├── src/zeroclaw_tools/       # ZeroClaw compatibility shim
+├── docs/diagrams/            # Generated SVG diagrams
 ├── templates/                # Jinja2 templates
 ├── vault/                    # Obsidian knowledge vault
 ├── output/                   # Generated outputs
@@ -133,10 +127,10 @@ See [config/agent_config.yaml](config/agent_config.yaml) for full configuration 
 
 Key environment variables in `.env`:
 - `OLLAMA_HOST` — Ollama server URL (default: `http://localhost:11434`)
-- `OLLAMA_VISION_MODEL` — Default vision model (default: `qwen2.5-vl:7b`)
+- `LLM_MODEL` — LLM model tag (default: `qwen2.5:7b`)
+- `OLLAMA_VISION_MODEL` — Vision model tag (default: `qwen2.5-vl:7b`)
 - `ARXIV_CATEGORIES` — ArXiv categories to monitor (default: `cs.CV,cs.AI,cs.LG`)
 - `SEMANTIC_SCHOLAR_API_KEY` — Optional Semantic Scholar API key
-- `BRAVE_API_KEY` — For web search via ZeroClaw
 
 ## License
 
