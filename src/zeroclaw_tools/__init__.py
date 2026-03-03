@@ -12,7 +12,6 @@ from typing import Any
 
 import httpx
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 __all__ = [
@@ -25,6 +24,12 @@ __all__ = [
     "http_request",
 ]
 
+_OLLAMA_HOSTS = ("localhost:11434", "127.0.0.1:11434", "0.0.0.0:11434")
+
+
+def _is_ollama(base_url: str) -> bool:
+    return any(h in base_url for h in _OLLAMA_HOSTS)
+
 
 def create_agent(
     tools: list,
@@ -32,13 +37,26 @@ def create_agent(
     api_key: str | None = None,
     base_url: str = "http://localhost:11434/v1",
 ) -> Any:
-    """Create a LangGraph ReAct agent backed by an Ollama-compatible OpenAI endpoint."""
-    llm = ChatOpenAI(
-        model=model,
-        api_key=api_key or "ollama",   # Ollama ignores the key; must be non-empty
-        base_url=base_url,
-        temperature=0,
-    )
+    """Create a LangGraph ReAct agent.
+
+    Uses ChatOllama (native /api/chat) for local Ollama endpoints — this is required
+    for reliable tool/function calling. Falls back to ChatOpenAI for remote endpoints.
+    """
+    if _is_ollama(base_url):
+        from langchain_ollama import ChatOllama
+        # Derive the Ollama host from base_url (strip trailing /v1 if present)
+        host = base_url.rstrip("/")
+        if host.endswith("/v1"):
+            host = host[:-3]
+        llm = ChatOllama(model=model, base_url=host, temperature=0)
+    else:
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(
+            model=model,
+            api_key=api_key or "ollama",
+            base_url=base_url,
+            temperature=0,
+        )
     return create_react_agent(llm, tools)
 
 
