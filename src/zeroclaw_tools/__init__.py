@@ -1,18 +1,25 @@
 """zeroclaw_tools compatibility shim.
 
-Provides the same interface as the zeroclaw-tools package using LangChain/LangGraph
-so the agent can run locally without the Rust ZeroClaw runtime.
+Provides the same interface as the zeroclaw-tools package using LangChain/LangGraph.
+Includes a text-based ReAct loop that works even when the local model does NOT emit
+native tool_calls (e.g. qwen2.5-coder outputs tool calls as JSON text content).
 """
 
 from __future__ import annotations
 
+import json
 import pathlib
+import re
 import subprocess
+import uuid
 from typing import Any
 
 import httpx
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tools import tool
-from langgraph.prebuilt import create_react_agent
+from langgraph.graph import END, StateGraph
+from langgraph.graph.message import add_messages
+from typing_extensions import Annotated, TypedDict
 
 __all__ = [
     "tool",
@@ -26,10 +33,167 @@ __all__ = [
 
 _OLLAMA_HOSTS = ("localhost:11434", "127.0.0.1:11434", "0.0.0.0:11434")
 
+_MAX_TOOL_ROUNDS = 10   # safety cap on agent loop iterations
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _is_ollama(base_url: str) -> bool:
     return any(h in base_url for h in _OLLAMA_HOSTS)
 
+
+def _extract_text_tool_call(content: str) -> tuple[str, dict] | None:
+    """Parse a JSON tool-call emitted as plain text by models that don't support
+    native function calling.
+
+    Handles both:
+      {"name": "tool_name", "arguments": {...}}
+      {"name": "tool_name", "args": {...}}
+    and JSON embedded inside a larger text response (e.g. with trailing reasoning).
+    Uses a balanced-brace scanner so nested objects are handled correctly.
+    """
+    # Try whole content first (fast path for clean JSON responses)
+    try:
+        data = json.loads(content.strip())
+        if isinstance(data, dict) and "name" in data:
+            args = data.get("arguments") or data.get("args") or {}
+            if isinstance(args, dict):
+                return data["name"], args
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Balanced-brace scanner — correctly handles nested {"arguments": {...}}
+    for start, ch in enumerate(content):
+        if ch != "{":
+            continue
+        depth = 0
+        for end in range(start, len(content)):
+            if content[end] == "{":
+                depth += 1
+            elif content[end] == "}":
+                depth -= 1
+                if depth == 0:
+                    candidate = content[start : end + 1]
+                    try:
+                        data = json.loads(candidate)
+                    except (json.JSONDecodeError, ValueError):
+                        break
+                    if isinstance(data, dict) and "name" in data:
+                        args = data.get("arguments") or data.get("args") or {}
+                        if isinstance(args, dict):
+                            return data["name"], args
+                    break  # valid JSON but not a tool call — keep scanning
+
+    return None
+
+
+def _build_tool_prompt(tools: list) -> str:
+    """Return the tools section injected into the system prompt for text-mode agents."""
+    lines = [
+        "You have access to the following tools. To call a tool, respond with ONLY a "
+        "JSON object in this exact format (no markdown, no extra text):\n"
+        '{"name": "<tool_name>", "arguments": {<args>}}\n',
+        "Available tools:",
+    ]
+    for t in tools:
+        schema = getattr(t, "args_schema", None)
+        args_desc = ""
+        if schema:
+            try:
+                props = schema.model_json_schema().get("properties", {})
+                args_desc = ", ".join(
+                    f'{k}: {v.get("type", "any")}' for k, v in props.items()
+                )
+            except Exception:
+                pass
+        lines.append(f"  - {t.name}({args_desc}): {t.description}")
+    lines.append(
+        "\nAfter receiving a tool result, reason over it and provide your final answer "
+        "as plain text (NOT as a JSON tool call)."
+    )
+    return "\n".join(lines)
+
+
+# ── Custom ReAct graph that handles text-based tool calls ────────────────────
+
+class _AgentState(TypedDict):
+    messages: Annotated[list, add_messages]
+
+
+def _make_text_react_graph(llm: Any, tools: list) -> Any:
+    """Build a LangGraph StateGraph that handles text-based tool calls."""
+    tool_map = {t.name: t for t in tools}
+    tool_prompt = _build_tool_prompt(tools)
+
+    def _inject_tool_prompt(messages: list) -> list:
+        """Prepend tool instructions to the first SystemMessage, or insert one."""
+        from langchain_core.messages import SystemMessage
+        out = list(messages)
+        for i, msg in enumerate(out):
+            if isinstance(msg, SystemMessage):
+                out[i] = SystemMessage(content=msg.content + "\n\n" + tool_prompt)
+                return out
+        out.insert(0, SystemMessage(content=tool_prompt))
+        return out
+
+    def call_model(state: _AgentState) -> dict:
+        msgs = _inject_tool_prompt(state["messages"])
+        response = llm.invoke(msgs)
+        return {"messages": [response]}
+
+    def call_tools(state: _AgentState) -> dict:
+        last = state["messages"][-1]
+        new_msgs: list = []
+
+        # ── Native tool_calls (models that do support function calling) ──────
+        if hasattr(last, "tool_calls") and last.tool_calls:
+            for tc in last.tool_calls:
+                fn = tool_map.get(tc["name"])
+                result = fn.invoke(tc["args"]) if fn else f"Unknown tool: {tc['name']}"
+                new_msgs.append(
+                    ToolMessage(content=str(result), tool_call_id=tc["id"])
+                )
+            return {"messages": new_msgs}
+
+        # ── Text-based tool call fallback ────────────────────────────────────
+        parsed = _extract_text_tool_call(str(last.content))
+        if parsed:
+            name, args = parsed
+            fn = tool_map.get(name)
+            result = fn.invoke(args) if fn else f"Unknown tool: {name}"
+            # Feed result back as a human turn so the model can produce a final answer
+            new_msgs.append(
+                HumanMessage(
+                    content=f"Tool '{name}' returned:\n{result}\n\n"
+                            "Now provide your final answer based on the above result."
+                )
+            )
+
+        return {"messages": new_msgs}
+
+    def should_continue(state: _AgentState) -> str:
+        last = state["messages"][-1]
+        # Safety: never loop more than _MAX_TOOL_ROUNDS times
+        ai_msgs = [m for m in state["messages"] if isinstance(m, AIMessage)]
+        if len(ai_msgs) >= _MAX_TOOL_ROUNDS:
+            return END
+
+        if hasattr(last, "tool_calls") and last.tool_calls:
+            return "tools"
+        if isinstance(last, AIMessage) and _extract_text_tool_call(str(last.content)):
+            return "tools"
+        return END
+
+    graph = StateGraph(_AgentState)
+    graph.add_node("agent", call_model)
+    graph.add_node("tools", call_tools)
+    graph.set_entry_point("agent")
+    graph.add_conditional_edges("agent", should_continue, {"tools": "tools", END: END})
+    graph.add_edge("tools", "agent")
+    return graph.compile()
+
+
+# ── Public create_agent ───────────────────────────────────────────────────────
 
 def create_agent(
     tools: list,
@@ -37,14 +201,14 @@ def create_agent(
     api_key: str | None = None,
     base_url: str = "http://localhost:11434/v1",
 ) -> Any:
-    """Create a LangGraph ReAct agent.
+    """Create a ReAct agent that works with both native and text-based tool calling.
 
-    Uses ChatOllama (native /api/chat) for local Ollama endpoints — this is required
-    for reliable tool/function calling. Falls back to ChatOpenAI for remote endpoints.
+    Uses ChatOllama for local Ollama endpoints.  If the model emits tool calls as
+    plain JSON text (no native function-calling support) the custom graph intercepts
+    and executes them before asking the model for its final answer.
     """
     if _is_ollama(base_url):
         from langchain_ollama import ChatOllama
-        # Derive the Ollama host from base_url (strip trailing /v1 if present)
         host = base_url.rstrip("/")
         if host.endswith("/v1"):
             host = host[:-3]
@@ -57,8 +221,11 @@ def create_agent(
             base_url=base_url,
             temperature=0,
         )
-    return create_react_agent(llm, tools)
 
+    return _make_text_react_graph(llm, tools)
+
+
+# ── Built-in tools ────────────────────────────────────────────────────────────
 
 @tool
 def shell(command: str) -> str:
