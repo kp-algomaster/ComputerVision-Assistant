@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '⚠️  Context window at 80% — compacting conversation to free space. Start a new session (/new) if you want a clean slate.' >&2"
+            "command": "printf '\\n🚨 CONTEXT WINDOW >80%%\\n\\nThe assistant will auto-compact this conversation.\\nFor a clean slate: type /new in Claude Code.\\n\\nBefore switching, ask the assistant:\\n  \"Summarize what we did and what to do next so I can paste it into the new session.\"\\n\\n' >&2"
           }
         ]
       }

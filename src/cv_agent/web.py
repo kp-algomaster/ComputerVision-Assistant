@@ -68,23 +68,56 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
                 await websocket.send_text(json.dumps({"type": "typing", "status": True}))
 
                 try:
-                    from cv_agent.agent import run_agent
-                    response = await run_agent(user_text, config, history)
+                    from cv_agent.agent import run_agent_stream
 
-                    from langchain_core.messages import HumanMessage
-                    history.append(HumanMessage(content=user_text))
-                    history.append({"role": "assistant", "content": response})
-
+                    # Signal stream start so client creates the message bubble
                     await websocket.send_text(json.dumps({
-                        "type": "message",
+                        "type": "stream_start",
                         "role": "assistant",
-                        "content": response,
+                    }))
+
+                    final_content = ""
+                    async for event in run_agent_stream(user_text, config, history):
+                        etype = event["type"]
+
+                        if etype == "token":
+                            await websocket.send_text(json.dumps({
+                                "type": "stream_token",
+                                "content": event["content"],
+                            }))
+
+                        elif etype == "tool_start":
+                            await websocket.send_text(json.dumps({
+                                "type": "tool_start",
+                                "name": event["name"],
+                                "input": event.get("input", ""),
+                            }))
+
+                        elif etype == "tool_end":
+                            await websocket.send_text(json.dumps({
+                                "type": "tool_end",
+                                "name": event["name"],
+                                "output": event.get("output", ""),
+                            }))
+
+                        elif etype == "done":
+                            final_content = event["content"]
+
+                    # Send final rendered message
+                    await websocket.send_text(json.dumps({
+                        "type": "stream_end",
+                        "content": final_content,
                         "html": markdown.markdown(
-                            response,
+                            final_content,
                             extensions=["fenced_code", "tables", "codehilite"],
                         ),
                         "timestamp": datetime.now().isoformat(),
                     }))
+
+                    from langchain_core.messages import HumanMessage
+                    history.append(HumanMessage(content=user_text))
+                    history.append({"role": "assistant", "content": final_content})
+
                 except Exception as e:
                     logger.exception("Agent error")
                     await websocket.send_text(json.dumps({

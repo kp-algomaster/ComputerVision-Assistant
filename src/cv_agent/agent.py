@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
 from typing import Any
 
@@ -101,6 +102,28 @@ def _make_delegation_tools(config: AgentConfig) -> list:
         delegation.append(delegate_paper_to_code)
 
     return delegation
+
+
+def _strip_leading_tool_calls(text: str) -> str:
+    """Strip JSON tool-call objects prepended to model text output.
+
+    When _MAX_TOOL_ROUNDS is hit the LLM sometimes outputs:
+      '{"name": "tool", "arguments": {...}}\n\nSorry, I could not...'
+    This strips all leading tool-call JSON objects and returns the trailing text.
+    Uses json.JSONDecoder.raw_decode so nested objects are handled correctly.
+    """
+    text = text.strip()
+    decoder = _json.JSONDecoder()
+    while text.startswith("{"):
+        try:
+            obj, end_idx = decoder.raw_decode(text)
+            if isinstance(obj, dict) and "name" in obj:
+                text = text[end_idx:].strip()
+            else:
+                break
+        except (_json.JSONDecodeError, ValueError):
+            break
+    return text
 
 
 SYSTEM_PROMPT = """\
@@ -265,6 +288,23 @@ def apply_hardware_probe(config: AgentConfig) -> AgentConfig:
     return config
 
 
+def _prepare_agent(config: AgentConfig, message: str, history: list[Any] | None = None):
+    """Shared setup for run_agent and run_agent_stream."""
+    config = apply_hardware_probe(config)
+    tools = build_tools(config)
+    agent = create_agent(
+        tools=tools,
+        model=config.llm.model,
+        api_key=config.llm.api_key or None,
+        base_url=config.llm.base_url,
+    )
+    messages: list[Any] = [SystemMessage(content=SYSTEM_PROMPT)]
+    if history:
+        messages.extend(trim_history(list(history), config.cache.max_history_chars))
+    messages.append(HumanMessage(content=message))
+    return agent, messages
+
+
 async def run_agent(
     message: str,
     config: AgentConfig | None = None,
@@ -274,23 +314,125 @@ async def run_agent(
     if config is None:
         config = load_config()
 
-    config = apply_hardware_probe(config)
-
-    tools = build_tools(config)
-    agent = create_agent(
-        tools=tools,
-        model=config.llm.model,
-        api_key=config.llm.api_key or None,
-        base_url=config.llm.base_url,
-    )
-
-    messages: list[Any] = [SystemMessage(content=SYSTEM_PROMPT)]
-    if history:
-        messages.extend(trim_history(list(history), config.cache.max_history_chars))
-    messages.append(HumanMessage(content=message))
-
+    agent, messages = _prepare_agent(config, message, history)
     result = await agent.ainvoke({"messages": messages})
     return result["messages"][-1].content
+
+
+async def run_agent_stream(
+    message: str,
+    config: AgentConfig | None = None,
+    history: list[Any] | None = None,
+):
+    """Async generator that yields streaming events from the agent.
+
+    Yields dicts with 'type' key:
+      - {"type": "token", "content": "..."}
+      - {"type": "tool_start", "name": "...", "input": "..."}
+      - {"type": "tool_end", "name": "...", "output": "..."}
+      - {"type": "done", "content": "..."}
+    """
+    if config is None:
+        config = load_config()
+
+    agent, messages = _prepare_agent(config, message, history)
+    full_content = ""
+    last_tool_name = ""
+    final_answer = ""
+    _in_tool_phase = False  # True while tools are being called
+    _token_buffer = ""
+
+    async for event in agent.astream_events(
+        {"messages": messages}, version="v2"
+    ):
+        kind = event.get("event", "")
+
+        if kind == "on_chat_model_stream":
+            chunk = event.get("data", {}).get("chunk")
+            if chunk and hasattr(chunk, "content") and chunk.content:
+                token = chunk.content
+                if not isinstance(token, str):
+                    continue
+
+                # Buffer tokens to detect if the model is starting a JSON tool call
+                # (e.g., '{"name": "..."}'). We don't want to stream this raw JSON to the UI.
+                _token_buffer += token
+
+                # If the buffer strictly starts with something that looks like the beginning
+                # of our tool call format, wait for more tokens.
+                if '{"name"'.startswith(_token_buffer.strip()) or _token_buffer.strip().startswith('{"name"'):
+                    # It's a tool call (or we're still waiting to find out)
+                    continue
+                else:
+                    # It's normal text. Flush the buffer and append.
+                    text_to_yield = _token_buffer
+                    _token_buffer = ""
+                
+                # If this is the first real text after the tool phase, clear old output
+                if _in_tool_phase:
+                    full_content = ""
+                    _in_tool_phase = False
+                
+                full_content += text_to_yield
+                yield {"type": "token", "content": text_to_yield}
+
+        elif kind == "on_chat_model_end":
+            # Capture the full model response at the end of each LLM call.
+            # This is the reliable fallback when streaming tokens are missed.
+            data_output = event.get("data", {}).get("output")
+            if data_output and hasattr(data_output, "content"):
+                content = data_output.content
+                if isinstance(content, list):
+                    content = "".join(
+                        part.get("text", "") if isinstance(part, dict) else str(part)
+                        for part in content
+                    )
+                if isinstance(content, str) and content.strip():
+                    clean_text = _strip_leading_tool_calls(content)
+                    if clean_text:
+                        final_answer = clean_text
+
+        elif kind == "on_tool_start":
+            name = event.get("name", "")
+            last_tool_name = name
+            _in_tool_phase = True
+            # Discard any buffered JSON from this model round — it's a tool call,
+            # not text the user should see. This prevents cross-round accumulation.
+            _token_buffer = ""
+            tool_input = str(event.get("data", {}).get("input", ""))[:200]
+            yield {"type": "tool_start", "name": name, "input": tool_input}
+
+        elif kind == "on_tool_end":
+            name = event.get("name", last_tool_name)
+            output = str(event.get("data", {}).get("output", ""))[:500]
+            yield {"type": "tool_end", "name": name, "output": output}
+
+    # Flush any remaining buffer text, stripping tool-call JSON that was suppressed
+    # during streaming but never properly discarded.
+    if _token_buffer.strip():
+        clean = _strip_leading_tool_calls(_token_buffer)
+        if clean:
+            full_content += clean
+            yield {"type": "token", "content": clean}
+
+    # Strip any tool-call JSON that leaked into full_content (last-resort safety net).
+    full_content = _strip_leading_tool_calls(full_content)
+
+    # Use streamed content if available, otherwise fall back to the model's
+    # complete response captured via on_chat_model_end.
+    if not full_content.strip():
+        if final_answer:
+            full_content = final_answer
+            yield {"type": "token", "content": final_answer}
+        else:
+            # Both paths empty — max tool rounds hit with no trailing text.
+            full_content = (
+                "I reached my tool call limit without completing the research. "
+                "Please try a more specific question."
+            )
+            yield {"type": "token", "content": full_content}
+
+    yield {"type": "done", "content": full_content}
 
 
 async def run_interactive(config: AgentConfig | None = None) -> None:

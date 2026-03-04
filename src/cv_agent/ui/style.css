@@ -25,6 +25,8 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+/* Ensure hidden attribute always wins over display: flex/grid rules */
+[hidden] { display: none !important; }
 html, body { height: 100%; font-family: var(--font-sans); background: var(--bg-primary); color: var(--text-primary); overflow: hidden; }
 body { display: flex; }
 
@@ -184,11 +186,24 @@ body { display: flex; }
 .message-content ul, .message-content ol { padding-left: 20px; margin-bottom: 8px; }
 .message-content img { max-width: 100%; border-radius: 6px; }
 
-.typing-indicator { padding: 8px 24px; display: flex; gap: 4px; }
-.typing-indicator span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); animation: bounce 1.4s infinite ease-in-out; }
-.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-@keyframes bounce { 0%, 80%, 100% { transform: scale(0.6); } 40% { transform: scale(1); } }
+/* ── Status Line (replaces typing dots) ── */
+.status-line { padding: 6px 24px; display: flex; align-items: center; gap: 6px; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); }
+.status-icon { color: var(--accent); font-size: 10px; flex-shrink: 0; animation: statusPulse 1.5s ease-in-out infinite; }
+.status-text { color: var(--text-secondary); }
+@keyframes statusPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+
+/* Tool activity — Claude Code style */
+.tool-activity { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; padding: 6px 10px; background: var(--bg-tertiary); border-radius: 6px; border-left: 2px solid var(--border); font-size: 12px; font-family: var(--font-mono); }
+.tool-entry { display: flex; align-items: baseline; gap: 5px; color: var(--text-secondary); }
+.tool-entry.done { color: var(--text-muted); }
+.tool-dot { color: var(--accent); font-size: 9px; flex-shrink: 0; animation: statusPulse 1.5s ease-in-out infinite; }
+.tool-entry.done .tool-dot { display: none; }
+.tool-check { color: var(--success); font-size: 11px; flex-shrink: 0; }
+.tool-name { color: var(--accent); font-weight: 600; }
+.tool-entry.done .tool-name { color: var(--text-muted); font-weight: 400; }
+.tool-input { color: var(--text-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+.tool-output { color: var(--text-muted); font-size: 11px; display: block; margin-left: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.7; }
 
 .chat-input { display: flex; gap: 8px; padding: 12px 24px 16px; border-top: 1px solid var(--border); background: var(--bg-secondary); }
 .chat-input textarea { flex: 1; background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; color: var(--text-primary); font-family: var(--font-sans); font-size: 14px; resize: none; max-height: 120px; outline: none; transition: border-color 0.15s; }

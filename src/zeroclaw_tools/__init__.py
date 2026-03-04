@@ -141,12 +141,12 @@ def _make_text_react_graph(llm: Any, tools: list) -> Any:
         out.insert(0, SystemMessage(content=tool_prompt))
         return out
 
-    def call_model(state: _AgentState) -> dict:
+    async def call_model(state: _AgentState) -> dict:
         msgs = _inject_tool_prompt(state["messages"])
-        response = llm.invoke(msgs)
+        response = await llm.ainvoke(msgs)
         return {"messages": [response]}
 
-    def call_tools(state: _AgentState) -> dict:
+    async def call_tools(state: _AgentState) -> dict:
         last = state["messages"][-1]
         new_msgs: list = []
 
@@ -170,7 +170,8 @@ def _make_text_react_graph(llm: Any, tools: list) -> Any:
             new_msgs.append(
                 HumanMessage(
                     content=f"Tool '{name}' returned:\n{result}\n\n"
-                            "Now provide your final answer based on the above result."
+                            "IMPORTANT: Now write your final answer as plain text. "
+                            "Do NOT call any more tools — synthesise the results you have and respond directly."
                 )
             )
 
@@ -182,6 +183,20 @@ def _make_text_react_graph(llm: Any, tools: list) -> Any:
         ai_msgs = [m for m in state["messages"] if isinstance(m, AIMessage)]
         if len(ai_msgs) >= _MAX_TOOL_ROUNDS:
             return END
+
+        # Early-exit if the last 3 AI messages all called the same tool —
+        # the model is stuck in a loop and getting the same results.
+        if len(ai_msgs) >= 3:
+            recent_tools: list[str] = []
+            for m in ai_msgs[-3:]:
+                if hasattr(m, "tool_calls") and m.tool_calls:
+                    recent_tools.append(m.tool_calls[0]["name"])
+                else:
+                    parsed = _extract_text_tool_call(str(m.content))
+                    if parsed:
+                        recent_tools.append(parsed[0])
+            if len(recent_tools) == 3 and len(set(recent_tools)) == 1:
+                return END  # stuck calling the same tool repeatedly
 
         if hasattr(last, "tool_calls") and last.tool_calls:
             return "tools"

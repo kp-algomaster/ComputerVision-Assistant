@@ -120,22 +120,171 @@ function initChat() {
     connectWebSocket();
 }
 
+// ── Streaming state ──
+let _streamingMsg = null;
+let _streamingBody = null;
+let _streamingContent = '';
+let _toolActivity = null;
+let _streamTimeout = null;
+let _hadToolCalls = false;
+
+function _resetStreamTimeout() {
+    if (_streamTimeout) clearTimeout(_streamTimeout);
+    // If no events arrive for 90s, auto-finalize to avoid stuck UI
+    _streamTimeout = setTimeout(() => {
+        if (_streamingBody) {
+            _finalizeStream(_streamingContent, '');
+        }
+    }, 90000);
+}
+
 function connectWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${location.host}/ws/chat`);
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'typing') {
-            document.getElementById('typingIndicator').hidden = !data.status;
-            scrollChat();
+            // suppress — status shown only during final write phase
         } else if (data.type === 'message') {
             addMessage('assistant', data.content, data.html);
+        } else if (data.type === 'stream_start') {
+            _startStreamingMessage();
+        } else if (data.type === 'stream_token') {
+            _resetStreamTimeout();
+            if (_hadToolCalls) {
+                const ind = document.getElementById('typingIndicator');
+                document.getElementById('typingText').textContent = 'Writing response…';
+                ind.hidden = false;
+                scrollChat();
+            }
+            _appendStreamToken(data.content);
+        } else if (data.type === 'tool_start') {
+            _resetStreamTimeout();
+            _showToolActivity(data.name, data.input);
+        } else if (data.type === 'tool_end') {
+            _resetStreamTimeout();
+            _hideToolActivity(data.name, data.output);
+        } else if (data.type === 'stream_end') {
+            if (_streamTimeout) clearTimeout(_streamTimeout);
+            document.getElementById('typingIndicator').hidden = true;
+            _finalizeStream(data.content, data.html);
         } else if (data.type === 'error') {
+            if (_streamTimeout) clearTimeout(_streamTimeout);
+            document.getElementById('typingIndicator').hidden = true;
+            _clearStream();
             addMessage('system', `Error: ${data.content}`);
         }
     };
     ws.onclose = () => setTimeout(connectWebSocket, 3000);
     ws.onerror = () => console.error('WebSocket error');
+}
+
+function _startStreamingMessage() {
+    const container = document.getElementById('chatMessages');
+    _streamingContent = '';
+    _hadToolCalls = false;
+
+    _streamingMsg = document.createElement('div');
+    _streamingMsg.className = 'message assistant';
+
+    const label = document.createElement('div');
+    label.className = 'message-label';
+    label.textContent = 'CV Assistant';
+
+    // Tool activity area (hidden until a tool is called)
+    _toolActivity = document.createElement('div');
+    _toolActivity.className = 'tool-activity';
+    _toolActivity.hidden = true;
+
+    _streamingBody = document.createElement('div');
+    _streamingBody.className = 'message-content streaming';
+
+    _streamingMsg.appendChild(label);
+    _streamingMsg.appendChild(_toolActivity);
+    _streamingMsg.appendChild(_streamingBody);
+    container.appendChild(_streamingMsg);
+    scrollChat();
+}
+
+function _appendStreamToken(token) {
+    if (!_streamingBody) return;
+    _streamingContent += token;
+    _streamingBody.textContent = _streamingContent;
+    scrollChat();
+}
+
+function _showToolActivity(name, input) {
+    if (!_toolActivity) return;
+    const entry = document.createElement('div');
+    entry.className = 'tool-entry running';
+    entry.dataset.toolName = name;
+    const argSnippet = input ? `(${input.slice(0, 100)})` : '';
+    entry.innerHTML = `<span class="tool-dot">⏺</span> <span class="tool-name">${_escHtml(name)}</span>` +
+        `<span class="tool-input">${_escHtml(argSnippet)}</span>`;
+    _toolActivity.appendChild(entry);
+    _toolActivity.hidden = false;
+    // Clear streamed content — model will regenerate after tool
+    _streamingContent = '';
+    _streamingBody.textContent = '';
+    scrollChat();
+}
+
+function _hideToolActivity(name, output) {
+    if (!_toolActivity) return;
+    _hadToolCalls = true;
+    const entries = _toolActivity.querySelectorAll(`.tool-entry[data-tool-name="${CSS.escape(name)}"].running`);
+    const entry = entries[entries.length - 1];
+    if (entry) {
+        entry.classList.remove('running');
+        entry.classList.add('done');
+        const check = document.createElement('span');
+        check.className = 'tool-check';
+        check.textContent = '✓';
+        entry.querySelector('.tool-dot')?.replaceWith(check);
+        if (output) {
+            const preview = document.createElement('span');
+            preview.className = 'tool-output';
+            preview.textContent = output.slice(0, 150) + (output.length > 150 ? '…' : '');
+            entry.appendChild(preview);
+        }
+    }
+    scrollChat();
+}
+
+function _finalizeStream(content, html) {
+    if (_streamingBody) {
+        _streamingBody.classList.remove('streaming');
+        const hasContent = Boolean(content && content.trim());
+        const hasHtml = Boolean(html && html.trim());
+
+        if (hasHtml) {
+            _streamingBody.innerHTML = html;
+        } else if (hasContent) {
+            _streamingBody.textContent = content;
+        } else {
+            _streamingBody.textContent = 'Completed tool calls, but no final response text was generated.';
+        }
+        _streamingBody.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+        renderMathInElement(_streamingBody);
+    }
+    _clearStream();
+    scrollChat();
+}
+
+function _clearStream() {
+    if (_streamTimeout) { clearTimeout(_streamTimeout); _streamTimeout = null; }
+    _streamingMsg = null;
+    _streamingBody = null;
+    _streamingContent = '';
+    _toolActivity = null;
+    _hadToolCalls = false;
+    document.getElementById('typingIndicator').hidden = true;
+}
+
+function _escHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
 }
 
 function sendMessage(text) {
@@ -371,7 +520,7 @@ function connectAgentWebSocket(agentId) {
             addAgentMessage('system', `Error: ${data.content}`);
         }
     };
-    agentWs.onclose = () => {};
+    agentWs.onclose = () => { };
     agentWs.onerror = () => addAgentMessage('system', 'WebSocket error.');
 }
 

@@ -47,7 +47,7 @@
             </div>
             <!-- Agent -->
             <div class="nav-group">
-                <div class="nav-group-title" data-toggle="grp-agent">Agent <span class="toggle-icon">−</span></div>
+                <div class="nav-group-title" data-toggle="grp-agent">Core <span class="toggle-icon">−</span></div>
                 <ul class="nav-list" id="grp-agent">
                     <li class="nav-item" data-view="skills"><span class="nav-icon">⚡</span>Skills</li>
                     <li class="nav-item" data-view="powers"><span class="nav-icon">🔌</span>Powers</li>
@@ -93,8 +93,9 @@
                         </div>
                     </div>
                 </div>
-                <div class="typing-indicator" id="typingIndicator" hidden>
-                    <span></span><span></span><span></span>
+                <div class="status-line" id="typingIndicator" hidden>
+                    <span class="status-icon">⏺</span>
+                    <span class="status-text" id="typingText">Writing response…</span>
                 </div>
                 <form class="chat-input" id="chatForm">
                     <textarea id="chatInput" placeholder="Ask about CV research, analyze papers, generate specs..." rows="1"></textarea>
@@ -133,8 +134,9 @@
                         <div class="message-content">Select an agent from the Agents view to start chatting.</div>
                     </div>
                 </div>
-                <div class="typing-indicator" id="agentTypingIndicator" hidden>
-                    <span></span><span></span><span></span>
+                <div class="status-line" id="agentTypingIndicator" hidden>
+                    <span class="status-icon">⏺</span>
+                    <span class="status-text" id="agentTypingText">Writing response…</span>
                 </div>
                 <form class="chat-input" id="agentChatForm">
                     <textarea id="agentChatInput" placeholder="Message the agent…" rows="1"></textarea>
