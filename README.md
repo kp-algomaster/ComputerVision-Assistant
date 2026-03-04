@@ -83,35 +83,7 @@ flowchart LR
 
 Single-page app at `http://localhost:8420` using a sidebar layout inspired by OpenClaw.
 
-```
-┌─────────────────────┬────────────────────────────────────────┐
-│  SIDEBAR            │  MAIN CONTENT AREA                     │
-│                     │                                        │
-│  💬 Chat            │  Active view rendered here.            │
-│                     │  WebSocket-powered live chat with      │
-│  ── Control ──      │  full markdown, code highlighting,     │
-│  📊 Overview        │  LaTeX equations (KaTeX), and          │
-│  🔗 Channels        │  Mermaid diagrams.                     │
-│  🤖 Models          │                                        │
-│  📋 Sessions        │                                        │
-│  ⏰ Jobs            │                                        │
-│                     │                                        │
-│  ── Agent ──        │                                        │
-│  ⚡ Skills          │                                        │
-│  🔌 Powers          │                                        │
-│                     │                                        │
-│  ── Research ──     │                                        │
-│  🗂️ Knowledge Vault │                                        │
-│  🕸️ Knowledge Graph │                                        │
-│  📝 Specs           │                                        │
-│  📰 Digests         │                                        │
-│                     │                                        │
-│  ── Settings ──     │                                        │
-│  ⚙️ Config          │                                        │
-│  🔧 Debug           │                                        │
-│  📄 Logs            │                                        │
-└─────────────────────┴────────────────────────────────────────┘
-```
+![Web UI](docs/screenshots/Web-UI.png)
 
 ---
 
