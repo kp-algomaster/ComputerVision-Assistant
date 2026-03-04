@@ -96,7 +96,7 @@ Skills are specialised capabilities the agent can perform. A skill is **Ready** 
 | ✍️ | Write Research Blog | Content | ✅ Ready |
 | 📰 | Weekly Digest | Content | ✅ Ready |
 | 📧 | Email Reports | Content | ⚡ Needs Power (Email) |
-| 🎥 | Video Understanding | Vision | 📦 Needs Install (`opencv-python`) |
+| 🎥 | Video Understanding | Vision | ⚡ Needs Power (Vid-LLMs) |
 | 🔍 | Object Detection | Vision | ⚡ Needs Power (2D Image Processing) |
 | 🎯 | Object Tracking | Vision | ⚡ Needs Power (2D Image Processing) |
 | ✂️ | Image Segmentation | Vision | ⚡ Needs Power (2D Image Processing) |
@@ -109,7 +109,7 @@ Skills are specialised capabilities the agent can perform. A skill is **Ready** 
 | 🎯 | Model Fine-Tuning | ML | ⚡ Needs Power (HuggingFace / Azure ML) |
 | 📊 | Dataset Analysis | ML | ✅ Ready |
 
-**5 / 15 skills ready** out of the box. Unlock the rest by configuring the relevant Powers.
+**6 / 15 skills ready** out of the box. Unlock the rest by configuring the relevant Powers.
 
 ---
 
@@ -137,6 +137,7 @@ Powers are external resources and integrations. Active powers unlock additional 
 | 🏆 | Kaggle | Inactive | `KAGGLE_USERNAME`, `KAGGLE_KEY` |
 | 🐙 | GitHub | Inactive | `GITHUB_TOKEN` |
 | 🔤 | OCR | Inactive | `OCR_ENGINE` (`tesseract` or `easyocr`); unlocks Document Text Extraction skill |
+| 🎬 | Vid-LLMs | Inactive | `VID_LLM_MODEL` (e.g. `video-llava`, `internvl2`); unlocks Video Understanding skill |
 
 ### ☁️ Cloud Compute
 
