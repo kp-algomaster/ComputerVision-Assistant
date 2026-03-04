@@ -15,6 +15,17 @@
 - Tools decorated with `@tool` from `zeroclaw_tools`
 - No docstrings on trivial functions; only where logic isn't self-evident
 
+## Dependency Licensing
+
+- **Only use MIT or Apache 2.0 licensed libraries** (BSD-2/3-Clause also acceptable — all permissive)
+- NEVER add AGPL, GPL, LGPL, or proprietary dependencies without explicit user approval
+- Known rejections: `ultralytics` (AGPL-3.0)
+- Preferred open-source CV stack:
+  - Detection: `torchvision` (BSD-3), `transformers` (Apache 2.0), `mmdetection` (Apache 2.0)
+  - Tracking: `supervision` (MIT), `norfair` (Apache 2.0), `deep_sort_realtime` (MIT)
+  - Stitching/geometry: `opencv-python` (Apache 2.0), `kornia` (Apache 2.0)
+  - Segmentation: SAM 2/3 via `transformers` (Apache 2.0)
+
 ## Project Conventions
 
 - Config loaded via `load_config()` — never hardcode paths or keys

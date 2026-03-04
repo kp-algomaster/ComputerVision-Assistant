@@ -35,19 +35,27 @@ class ModelFit:
     params_b: float
     vram_gb: float
     composite_score: float
+    runtime: str = "ollama"   # ollama | mlx | llamacpp
+    gguf_sources: list[dict] = field(default_factory=list)
     use_cases: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> ModelFit:
+        # llmfit ≥0.4 uses fit_level/best_quant/score/memory_required_gb
+        fit_raw = d.get("fit_level") or d.get("fit", "unknown")
+        use_case_raw = d.get("use_case") or ""
+        runtime_raw = (d.get("runtime") or d.get("runtime_label") or "ollama").lower()
         return cls(
             name=d.get("name", ""),
             provider=d.get("provider", ""),
-            fit=d.get("fit", "unknown"),
-            quantization=d.get("quantization", ""),
+            fit=fit_raw.lower() if fit_raw else "unknown",
+            quantization=d.get("best_quant") or d.get("quantization", ""),
             params_b=float(d.get("params_b", 0)),
-            vram_gb=float(d.get("vram_gb", 0)),
-            composite_score=float(d.get("composite_score", 0)),
-            use_cases=d.get("use_cases", []),
+            vram_gb=float(d.get("memory_required_gb") or d.get("vram_gb", 0)),
+            composite_score=float(d.get("score") or d.get("composite_score", 0)),
+            runtime=runtime_raw,
+            gguf_sources=d.get("gguf_sources", []),
+            use_cases=[use_case_raw] if use_case_raw else d.get("use_cases", []),
         )
 
 
@@ -56,7 +64,11 @@ class HardwareInfo:
     ram_gb: float = 0.0
     cpu_cores: int = 0
     gpu_vram_gb: float = 0.0
+    gpu_cores: int = 0
+    gpu_name: str = ""
+    cpu_name: str = ""
     acceleration: str = "cpu"   # metal | cuda | rocm | cpu
+    unified_memory: bool = False
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> HardwareInfo:
@@ -71,7 +83,11 @@ class HardwareInfo:
             ram_gb=ram_gb,
             cpu_cores=int(d.get("cpu_cores", 0)),
             gpu_vram_gb=total_vram,
+            gpu_cores=_get_gpu_cores(),
+            gpu_name=d.get("gpu_name", ""),
+            cpu_name=d.get("cpu_name", ""),
             acceleration=str(acceleration).lower(),
+            unified_memory=bool(d.get("unified_memory", False)),
         )
 
 
@@ -103,6 +119,26 @@ def _run_llmfit_json(*args: str, timeout: int = 30) -> dict | list | None:
     except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as exc:
         logger.warning("llmfit call failed: %s", exc)
         return None
+
+
+def _get_gpu_cores() -> int:
+    """Return GPU shader/execution core count via system_profiler (macOS) or 0."""
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPDisplaysDataType", "-json"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return 0
+        data = json.loads(result.stdout)
+        displays = data.get("SPDisplaysDataType", [])
+        for gpu in displays:
+            cores = gpu.get("sppci_cores")
+            if cores:
+                return int(cores)
+    except Exception:
+        pass
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +175,9 @@ def get_runnable_models(
         f"--use-case={use_case}",
         f"--min-fit={min_fit}",
     )
+    # llmfit wraps results under a "models" key
+    if isinstance(data, dict):
+        data = data.get("models", [])
     if not isinstance(data, list):
         return []
     return [ModelFit.from_dict(m) for m in data]

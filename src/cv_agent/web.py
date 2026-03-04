@@ -1385,6 +1385,41 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
         already, msg = ensure_ollama_model(model, config.vision.ollama.host)
         return JSONResponse({"already_present": already, "message": msg, "model": model})
 
+    @app.post("/api/models/pull-cmd")
+    async def pull_model_cmd(body: dict):
+        """Stream `ollama pull` progress as SSE (NDJSON from Ollama API)."""
+        import json as _json
+        import httpx as _httpx
+        from fastapi.responses import StreamingResponse as _SR
+        model = (body.get("model") or "").strip()
+        if not model:
+            return JSONResponse({"error": "model tag is required"}, status_code=400)
+        ollama_host = config.vision.ollama.host.rstrip("/")
+
+        async def _stream():
+            try:
+                async with _httpx.AsyncClient(timeout=600) as client:
+                    async with client.stream(
+                        "POST", f"{ollama_host}/api/pull",
+                        json={"name": model, "stream": True},
+                    ) as resp:
+                        if resp.status_code != 200:
+                            err = _json.dumps({"error": f"Ollama returned HTTP {resp.status_code}"})
+                            yield f"data: {err}\n\n"
+                            return
+                        async for line in resp.aiter_lines():
+                            if line:
+                                yield f"data: {line}\n\n"
+            except Exception as exc:
+                yield f'data: {_json.dumps({"error": str(exc)})}\n\n'
+            yield 'data: {"status":"__done__"}\n\n'
+
+        return _SR(
+            _stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     @app.delete("/api/models/{name:path}")
     async def delete_model(name: str):
         """Delete a pulled model from Ollama."""
@@ -1455,7 +1490,11 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
                 "ram_gb": hw.ram_gb,
                 "cpu_cores": hw.cpu_cores,
                 "gpu_vram_gb": hw.gpu_vram_gb,
+                "gpu_cores": hw.gpu_cores,
+                "gpu_name": hw.gpu_name,
+                "cpu_name": hw.cpu_name,
                 "acceleration": hw.acceleration,
+                "unified_memory": hw.unified_memory,
             } if hw else None,
             "recommended": [
                 {
@@ -1465,10 +1504,69 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
                     "quantization": m.quantization,
                     "score": round(m.composite_score, 1),
                     "vram_gb": round(m.vram_gb, 1),
+                    "runtime": m.runtime,
+                    "gguf_sources": m.gguf_sources,
                 }
                 for m in recs
             ],
         })
+
+    # ── Local Servers ───────────────────────────────────────────────────────
+
+    @app.get("/api/local-servers")
+    async def list_local_servers():
+        from cv_agent.server_manager import get_all_statuses
+        return JSONResponse(await get_all_statuses())
+
+    @app.post("/api/local-servers/{server_id}/start")
+    async def start_local_server(server_id: str):
+        from cv_agent.server_manager import start_server
+        msg = await start_server(server_id)
+        return JSONResponse({"message": msg})
+
+    @app.post("/api/local-servers/{server_id}/stop")
+    async def stop_local_server(server_id: str):
+        from cv_agent.server_manager import stop_server
+        msg = await stop_server(server_id)
+        return JSONResponse({"message": msg})
+
+    @app.post("/api/local-servers/{server_id}/restart")
+    async def restart_local_server(server_id: str):
+        from cv_agent.server_manager import restart_server
+        msg = await restart_server(server_id)
+        return JSONResponse({"message": msg})
+
+    @app.patch("/api/local-servers/{server_id}")
+    async def update_local_server(server_id: str, body: dict):
+        from cv_agent.server_manager import set_device
+        if "device" in body:
+            set_device(server_id, body["device"])
+        return JSONResponse({"ok": True})
+
+    # ── Local Model Catalog ─────────────────────────────────────────────────
+
+    @app.get("/api/local-models/catalog")
+    async def local_model_catalog():
+        from cv_agent.local_model_manager import get_catalog_with_status
+        return JSONResponse(get_catalog_with_status())
+
+    @app.post("/api/local-models/{model_id}/download")
+    async def download_local_model(model_id: str):
+        from cv_agent.local_model_manager import stream_hf_download
+        from fastapi.responses import StreamingResponse as _SR
+        return _SR(
+            stream_hf_download(model_id),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.delete("/api/local-models/{model_id}")
+    async def delete_local_model(model_id: str):
+        from cv_agent.local_model_manager import delete_model, _ALL
+        if model_id not in _ALL:
+            return JSONResponse({"error": "Unknown model"}, status_code=404)
+        delete_model(model_id)
+        return JSONResponse({"ok": True, "deleted": model_id})
 
     # ── Powers ─────────────────────────────────────────────────────────────
 
@@ -1660,6 +1758,11 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
         has_video  = _pkg("cv2") or _pkg("decord")
         has_paperbanana = _pkg("paperbanana")
 
+        from cv_agent.local_model_manager import is_model_downloaded
+        has_monkey_ocr = is_model_downloaded("monkey-ocr")
+        has_paddle_ocr = _pkg("paddleocr")
+        has_any_ocr    = has_monkey_ocr or has_paddle_ocr
+
         skills = {
             "research_blog": {
                 "label": "Write Research Blog", "icon": "✍️", "category": "content",
@@ -1704,6 +1807,64 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
                 "tools": ["analyze_image", "shell"],
                 "missing": [] if has_video else ["opencv-python or decord"],
                 "install": None if has_video else "pip install opencv-python",
+            },
+            "image_stitching": {
+                "label": "Image Stitching", "icon": "🧩", "category": "vision",
+                "description": "Stitch multiple overlapping images into seamless panoramas or mosaics using OpenCV feature matching.",
+                "status": "ready" if _pkg("cv2") else "needs-install",
+                "tools": ["shell", "file_read", "file_write"],
+                "missing": [] if _pkg("cv2") else ["opencv-python"],
+                "install": None if _pkg("cv2") else "pip install opencv-python",
+            },
+            "object_detection": {
+                "label": "Object Detection", "icon": "🎯", "category": "vision",
+                "description": "Detect and localise objects using torchvision Faster R-CNN / FCOS / RetinaNet or HuggingFace RT-DETR (Apache 2.0 / BSD-3 only).",
+                "status": "ready" if (_pkg("torchvision") or _pkg("transformers")) else "needs-install",
+                "tools": ["analyze_image", "shell"],
+                "missing": [] if (_pkg("torchvision") or _pkg("transformers")) else ["torchvision or transformers"],
+                "install": None if (_pkg("torchvision") or _pkg("transformers")) else "pip install torchvision",
+            },
+            "object_tracking": {
+                "label": "Object Tracking", "icon": "📡", "category": "vision",
+                "description": "Track objects across video frames using supervision (MIT) with ByteTrack / SORT, or SAM 3 video segmentation.",
+                "status": "ready" if _pkg("supervision") else "needs-install",
+                "tools": ["shell", "file_read", "file_write"],
+                "missing": [] if _pkg("supervision") else ["supervision"],
+                "install": None if _pkg("supervision") else "pip install supervision",
+            },
+            "text_to_image": {
+                "label": "Text → Image", "icon": "🖼️", "category": "vision",
+                "description": "Generate images from text prompts using diffusers (Apache 2.0) — SD-Turbo, SDXL-Turbo. Runs locally on MPS / CUDA / CPU.",
+                "status": "ready" if _pkg("diffusers") else "needs-install",
+                "tools": ["shell", "file_write"],
+                "missing": [] if _pkg("diffusers") else ["diffusers"],
+                "install": None if _pkg("diffusers") else "pip install diffusers transformers accelerate",
+            },
+            "super_resolution": {
+                "label": "Super Resolution", "icon": "🔭", "category": "vision",
+                "description": "Upscale images 2×–4× using spandrel (MIT) — supports ESRGAN, SwinIR, HAT, and Real-ESRGAN architectures.",
+                "status": "ready" if (_pkg("spandrel") or _pkg("basicsr")) else "needs-install",
+                "tools": ["shell", "file_read", "file_write"],
+                "missing": [] if (_pkg("spandrel") or _pkg("basicsr")) else ["spandrel"],
+                "install": None if (_pkg("spandrel") or _pkg("basicsr")) else "pip install spandrel",
+            },
+            "image_denoising": {
+                "label": "Image Denoising", "icon": "✨", "category": "vision",
+                "description": "Remove noise from images using kornia (Apache 2.0) — Gaussian, bilateral, NLM, and diffusion-based denoisers.",
+                "status": "ready" if (_pkg("kornia") or _pkg("skimage")) else "needs-install",
+                "tools": ["shell", "file_read", "file_write"],
+                "missing": [] if (_pkg("kornia") or _pkg("skimage")) else ["kornia"],
+                "install": None if (_pkg("kornia") or _pkg("skimage")) else "pip install kornia",
+            },
+            "document_extraction": {
+                "label": "Image Document Extraction", "icon": "📄", "category": "vision",
+                "description": "Extract structured text, tables, and layout from document images using Monkey OCR 1.5 (default) or PaddleOCR. Monkey OCR understands document structure, equations, and mixed layouts.",
+                "status": "ready" if has_monkey_ocr else ("ready" if has_paddle_ocr else "needs-model"),
+                "tools": ["shell", "file_read", "file_write"],
+                "missing": [] if has_any_ocr else ["Monkey OCR 1.5 model"],
+                "model": "monkey-ocr" if has_monkey_ocr else ("paddleocr" if has_paddle_ocr else "monkey-ocr"),
+                "model_label": "Monkey OCR 1.5" if has_monkey_ocr else ("PaddleOCR" if has_paddle_ocr else "Monkey OCR 1.5 (not downloaded)"),
+                "install": None if has_any_ocr else "Download Monkey OCR 1.5 from the Models view",
             },
             "paper_to_spec": {
                 "label": "Paper → Spec", "icon": "📋", "category": "research",

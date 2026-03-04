@@ -984,7 +984,215 @@ async function testIntegration(id) {
 // ═══════════════════════════════════════════════════════════════════════
 
 async function loadInstances() {
-    await Promise.all([loadHardwareAndRecommended(), loadPulledModels()]);
+    await Promise.all([
+        loadLocalServers(),
+        loadModelCatalog(),
+        loadHardwareAndRecommended(),
+        loadPulledModels(),
+    ]);
+}
+
+// ── Local Servers ──────────────────────────────────────────────────────────
+
+async function loadLocalServers() {
+    try {
+        const [servers] = await Promise.all([
+            fetch('/api/local-servers').then(r => r.json()),
+        ]);
+        _renderServerManagement(servers);
+        _renderServerStatus(servers);
+    } catch (e) {
+        document.getElementById('serverManagementList').innerHTML = '<p class="placeholder">Failed to load servers.</p>';
+    }
+}
+
+function _renderServerManagement(servers) {
+    const el = document.getElementById('serverManagementList');
+    el.innerHTML = '';
+    for (const s of servers) {
+        const connected = s.healthy;
+        const statusCls = connected ? 'connected' : 'disconnected';
+        const statusLabel = connected ? '● Connected' : '○ Disconnected';
+        const deviceOpts = ['GPU', 'CPU', 'Auto', 'MPS', 'CUDA'].map(d =>
+            `<option value="${d.toLowerCase()}" ${s.device === d.toLowerCase() ? 'selected' : ''}>${d}</option>`
+        ).join('');
+        const activeLabel = s.healthy ? `Active: ${s.device.toUpperCase()}` : '';
+        const activeBadge = s.healthy ? `<span class="accel-badge ${s.device === 'mps' || s.device === 'gpu' ? 'metal' : 'cpu'}">${activeLabel}</span>` : '';
+        const ctrlBtns = s.managed
+            ? `<button class="srv-btn srv-restart" onclick="serverAction('${s.id}','restart')">↻ Restart</button>
+               <button class="srv-btn srv-stop" onclick="serverAction('${s.id}','stop')">■ Stop</button>`
+            : `<button class="srv-btn srv-restart" onclick="serverAction('${s.id}','restart')" disabled title="Externally managed">↻</button>`;
+        const card = document.createElement('div');
+        card.className = 'srv-card';
+        card.innerHTML = `
+            <div class="srv-header">
+                <div class="srv-info">
+                    <strong>${escapeHtml(s.name)}</strong>
+                    <span class="srv-url">${escapeHtml(s.url)}</span>
+                </div>
+                <span class="srv-status ${statusCls}">${statusLabel}</span>
+            </div>
+            <div class="srv-controls">
+                ${ctrlBtns}
+                <span class="srv-device-label">Device:</span>
+                <select class="srv-device-select" onchange="setServerDevice('${s.id}', this.value)">${deviceOpts}</select>
+                ${activeBadge}
+            </div>`;
+        el.appendChild(card);
+    }
+}
+
+function _renderServerStatus(servers) {
+    const el = document.getElementById('serverStatusList');
+    el.innerHTML = '';
+    for (const s of servers) {
+        const row = document.createElement('div');
+        row.className = 'srv-status-row';
+        row.innerHTML = `
+            <span class="srv-status-name">${escapeHtml(s.name)}</span>
+            <span class="srv-status ${s.healthy ? 'connected' : 'disconnected'}">${s.healthy ? '● Connected' : '○ Disconnected'}</span>`;
+        el.appendChild(row);
+    }
+}
+
+async function serverAction(id, action) {
+    try {
+        await fetch(`/api/local-servers/${id}/${action}`, { method: 'POST' });
+        await loadLocalServers();
+    } catch (e) { console.error(e); }
+}
+
+async function setServerDevice(id, device) {
+    try {
+        await fetch(`/api/local-servers/${id}`, {
+            method: 'PATCH', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ device }),
+        });
+        await loadLocalServers();
+    } catch (e) { console.error(e); }
+}
+
+// ── Local Model Catalog ────────────────────────────────────────────────────
+
+async function loadModelCatalog() {
+    try {
+        const models = await fetch('/api/local-models/catalog').then(r => r.json());
+        _renderModelCatalog(models);
+    } catch (e) {
+        document.getElementById('localModelCatalog').innerHTML = '<p class="placeholder">Failed to load catalog.</p>';
+    }
+}
+
+const _CATALOG_CATEGORY_ORDER = ['Image Generation', 'Video Generation', 'Segmentation', 'OCR'];
+
+function _renderModelCatalog(models) {
+    const el = document.getElementById('localModelCatalog');
+    el.innerHTML = '';
+    // Group by category
+    const groups = {};
+    for (const m of models) (groups[m.category] = groups[m.category] || []).push(m);
+    for (const cat of _CATALOG_CATEGORY_ORDER) {
+        if (!groups[cat]) continue;
+        const section = document.createElement('div');
+        section.className = 'mcat-section';
+        section.innerHTML = `<div class="mcat-cat-header">${cat}</div>`;
+        for (const m of groups[cat]) {
+            const sizeLabel = m.downloaded && m.local_size_gb ? `Size: ${m.local_size_gb} GB` : `~${m.size_gb} GB`;
+            const statusBadge = m.downloaded ? '<span class="mcat-badge downloaded">Downloaded</span>' : '';
+            const pipNote = m.pip_pkg ? `<span class="mcat-pip-note">via pip: ${m.pip_pkg}</span>` : '';
+            const rightCol = m.downloaded
+                ? `<div class="mcat-actions">
+                       <span class="mcat-ready">Ready</span>
+                       <button class="btn-mcat-delete" onclick="deleteLocalModel('${m.id}', this)" title="Delete">🗑</button>
+                   </div>`
+                : m.pip_pkg
+                    ? `<div class="mcat-actions"><span class="mcat-pip-install">pip install ${m.pip_pkg}</span></div>`
+                    : `<div class="mcat-actions"><button class="btn-mcat-download" onclick="downloadLocalModel('${m.id}', this)">⬇ Download</button></div>`;
+            const card = document.createElement('div');
+            card.className = 'mcat-card';
+            card.dataset.modelId = m.id;
+            card.innerHTML = `
+                <div class="mcat-info">
+                    <div class="mcat-name">${escapeHtml(m.name)} ${statusBadge} ${pipNote}</div>
+                    <div class="mcat-desc">${escapeHtml(m.desc)}</div>
+                    <div class="mcat-size">${sizeLabel}</div>
+                </div>
+                ${rightCol}`;
+            section.appendChild(card);
+        }
+        el.appendChild(section);
+    }
+}
+
+async function downloadLocalModel(modelId, btn) {
+    const statusEl = document.getElementById('localModelStatus');
+    const progressWrap = document.getElementById('localModelProgressWrap');
+    const progressFill = document.getElementById('localModelProgressFill');
+    const progressPct  = document.getElementById('localModelProgressPct');
+
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    statusEl.hidden = false;
+    statusEl.className = 'pull-status';
+    statusEl.textContent = `Starting download…`;
+    progressWrap.hidden = false;
+    progressFill.style.width = '0%';
+    progressPct.textContent = '0%';
+
+    try {
+        const resp = await fetch(`/api/local-models/${modelId}/download`, { method: 'POST' });
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        outer: while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split('\n');
+            buf = lines.pop();
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                let ev;
+                try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+                if (ev.error) throw new Error(ev.error);
+                if (ev.status === '__done__') break outer;
+                if (ev.downloaded_gb !== undefined && ev.total_gb) {
+                    const pct = Math.min(100, Math.round(ev.downloaded_gb / ev.total_gb * 100));
+                    const dlStr = ev.downloaded_gb.toFixed(2);
+                    const totStr = ev.total_gb.toFixed(2);
+                    statusEl.textContent = `Downloading… ${dlStr} / ${totStr} GB`;
+                    progressFill.style.width = pct + '%';
+                    progressPct.textContent = pct + '%';
+                } else if (ev.status) {
+                    statusEl.textContent = ev.status;
+                }
+            }
+        }
+        statusEl.className = 'pull-status success';
+        statusEl.textContent = 'Download complete!';
+        progressFill.style.width = '100%';
+        progressPct.textContent = '100%';
+        await loadModelCatalog();
+    } catch (e) {
+        statusEl.className = 'pull-status error';
+        statusEl.textContent = 'Error: ' + e.message;
+        progressWrap.hidden = true;
+        btn.disabled = false;
+        btn.textContent = '⬇ Download';
+    }
+}
+
+async function deleteLocalModel(modelId, btn) {
+    if (!confirm(`Delete local files for this model? This cannot be undone.`)) return;
+    btn.disabled = true;
+    try {
+        await fetch(`/api/local-models/${modelId}`, { method: 'DELETE' });
+        await loadModelCatalog();
+    } catch (e) {
+        alert('Delete failed: ' + e.message);
+        btn.disabled = false;
+    }
 }
 
 async function loadHardwareAndRecommended() {
@@ -996,15 +1204,20 @@ async function loadHardwareAndRecommended() {
         if (hw) {
             const accel = hw.acceleration || 'cpu';
             const accelLabel = { metal: 'Metal', mps: 'MPS', mlx: 'MLX', cuda: 'CUDA', rocm: 'ROCm', cpu: 'CPU' }[accel] || accel.toUpperCase();
-            const inferLabel = accel === 'cpu' ? 'CPU' : accelLabel;
             const vramLabel = hw.gpu_vram_gb > 0 ? `${hw.gpu_vram_gb.toFixed(0)} GB` : '—';
+            const gpuCoresLabel = hw.gpu_cores > 0 ? hw.gpu_cores : '—';
+            const unifiedBadge = hw.unified_memory ? '<span class="hw-badge-unified">Unified</span>' : '';
+            const chipName = hw.cpu_name || hw.gpu_name || '';
             hwEl.innerHTML = `
                 <div class="hw-grid">
-                    <div class="hw-card"><div class="hw-value">${hw.ram_gb.toFixed(0)} GB</div><div class="hw-label">System RAM</div></div>
-                    <div class="hw-card"><div class="hw-value">${vramLabel}</div><div class="hw-label">GPU VRAM</div></div>
+                    <div class="hw-card"><div class="hw-value">${hw.ram_gb.toFixed(0)} GB</div><div class="hw-label">System RAM${hw.unified_memory ? ' / VRAM' : ''}</div></div>
+                    <div class="hw-card"><div class="hw-value">${vramLabel}</div><div class="hw-label">GPU VRAM${unifiedBadge}</div></div>
                     <div class="hw-card"><div class="hw-value">${hw.cpu_cores}</div><div class="hw-label">CPU Cores</div></div>
-                    <div class="hw-card"><div class="hw-value">${inferLabel}</div><div class="hw-label">Inference</div></div>
-                    <div class="hw-accel"><span>Acceleration</span><span class="accel-badge ${accel}">${accelLabel}</span></div>
+                    <div class="hw-card"><div class="hw-value">${gpuCoresLabel}</div><div class="hw-label">GPU Cores</div></div>
+                </div>
+                <div class="hw-footer">
+                    ${chipName ? `<span class="hw-chip-name">${chipName}</span>` : ''}
+                    <span class="accel-badge ${accel}">${accelLabel}</span>
                 </div>`;
         } else if (!data.llmfit_available) {
             hwEl.innerHTML = `<div class="llmfit-notice">⚠️ <strong>llmfit not installed</strong> — hardware detection unavailable.<br>Install: <code>brew install llmfit</code></div>`;
@@ -1027,11 +1240,19 @@ async function loadHardwareAndRecommended() {
             const row = document.createElement('div');
             row.className = 'model-row';
             const fitCls = { perfect: 'fit-perfect', good: 'fit-good', marginal: 'fit-marginal' }[m.fit] || 'fit-unknown';
+            const runtime = (m.runtime || 'ollama').toLowerCase();
+            const runtimeLabel = { mlx: 'MLX', llamacpp: 'llama.cpp', ollama: 'Ollama' }[runtime] || runtime.toUpperCase();
+            const shortName = m.name.includes('/') ? m.name.split('/').pop() : m.name;
+            // For MLX models, prefer the first gguf_source as the pull target (hf.co/<repo>)
+            const ggufRepo = (m.gguf_sources || [])[0]?.repo;
+            const pullTag = ggufRepo ? `hf.co/${ggufRepo}` : (m.name.includes('/') ? `hf.co/${m.name}` : `${m.name}:${m.quantization}`);
+            const displayTag = `${m.name}:${m.quantization}`;
             row.innerHTML = `
                 <span class="fit-badge ${fitCls}">${m.fit}</span>
-                <span class="model-name" title="${m.name}:${m.quantization}">${m.name}:${m.quantization}</span>
+                <span class="runtime-badge runtime-${runtime}">${runtimeLabel}</span>
+                <span class="model-name" title="${displayTag}">${shortName}:${m.quantization}</span>
                 <span class="model-meta">${m.vram_gb}GB</span>
-                <button class="btn-pull-sm" onclick="quickPull('${m.name}:${m.quantization}', this)">⬇</button>`;
+                <button class="btn-pull-sm" onclick="quickPullCmd('${escapeHtml(pullTag)}', this)" title="ollama pull ${escapeHtml(pullTag)}">⬇</button>`;
             recEl.appendChild(row);
         }
     } catch (e) {
@@ -1039,6 +1260,20 @@ async function loadHardwareAndRecommended() {
         console.error(e);
     }
 }
+
+function _categorizeModel(name) {
+    const n = name.toLowerCase();
+    if (/llava|glm-ocr|olmocr|moondream|bakllava|vision|vl:|vl-|minicpm-v|qwen.*vl|cogvlm|idefics|ocr/.test(n)) return 'Vision';
+    if (/thinking|r1|reasoning|qwq|deepseek-r/.test(n)) return 'Reasoning';
+    if (/coder|codellama|code|starcoder|deepseek-coder|magicoder|wizard-coder/.test(n)) return 'Coding';
+    if (/embed|minilm|bge-|nomic-embed/.test(n)) return 'Embedding';
+    if (/tts|whisper|speech|transcri/.test(n)) return 'Specialized';
+    if (/cloud/.test(n)) return 'Cloud';
+    return 'General';
+}
+
+const _CATEGORY_ORDER = ['Vision', 'Reasoning', 'Coding', 'General', 'Embedding', 'Specialized', 'Cloud'];
+const _CATEGORY_ICON = { Vision: '👁', Reasoning: '🧠', Coding: '💻', General: '💬', Embedding: '🔢', Specialized: '🎙', Cloud: '☁' };
 
 async function loadPulledModels() {
     try {
@@ -1049,14 +1284,30 @@ async function loadPulledModels() {
         const models = data.models || [];
         badge.textContent = models.length;
         if (models.length === 0) { container.innerHTML = '<p class="placeholder">No models pulled yet.</p>'; return; }
-        container.innerHTML = '';
+
+        // Group by category
+        const groups = {};
         for (const name of models.sort()) {
-            const row = document.createElement('div');
-            row.className = 'model-row';
-            row.innerHTML = `
-                <span class="model-name" title="${name}">${name}</span>
-                <button class="btn-delete" onclick="deleteModel('${name}', this)" title="Delete">✕</button>`;
-            container.appendChild(row);
+            const cat = _categorizeModel(name);
+            (groups[cat] = groups[cat] || []).push(name);
+        }
+
+        container.innerHTML = '';
+        for (const cat of _CATEGORY_ORDER) {
+            if (!groups[cat]) continue;
+            const section = document.createElement('div');
+            section.className = 'model-category';
+            section.innerHTML = `<div class="model-cat-header">${_CATEGORY_ICON[cat] || ''} ${cat} <span class="model-cat-count">${groups[cat].length}</span></div>`;
+            for (const name of groups[cat]) {
+                const row = document.createElement('div');
+                row.className = 'model-row';
+                const displayName = name.includes('/') ? name.split('/').pop() : name;
+                row.innerHTML = `
+                    <span class="model-name" title="${name}">${displayName}</span>
+                    <button class="btn-delete" onclick="deleteModel('${name}', this)" title="Delete">✕</button>`;
+                section.appendChild(row);
+            }
+            container.appendChild(section);
         }
     } catch {
         document.getElementById('pulledModelsList').innerHTML = '<p class="placeholder">Failed to load.</p>';
@@ -1113,6 +1364,72 @@ async function quickPull(modelTag, btn) {
     } catch (e) {
         status.className = 'pull-status error';
         status.textContent = 'Error: ' + e.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '⬇';
+    }
+}
+
+async function quickPullCmd(modelTag, btn) {
+    const status = document.getElementById('pullStatus');
+    const progressWrap = document.getElementById('pullProgressWrap');
+    const progressFill = document.getElementById('pullProgressFill');
+    const progressPct  = document.getElementById('pullProgressPct');
+
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    status.hidden = false;
+    status.className = 'pull-status';
+    status.textContent = `Starting: ollama pull ${modelTag} …`;
+    progressWrap.hidden = false;
+    progressFill.style.width = '0%';
+    progressPct.textContent = '0%';
+
+    try {
+        const resp = await fetch('/api/models/pull-cmd', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: modelTag }),
+        });
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        outer: while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split('\n');
+            buf = lines.pop();
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                let ev;
+                try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+                if (ev.error) throw new Error(ev.error);
+                if (ev.status === '__done__') break outer;
+
+                const st = ev.status || '';
+                if (ev.total && ev.completed) {
+                    const pct = Math.min(100, Math.round(ev.completed / ev.total * 100));
+                    const doneGb = (ev.completed / 1e9).toFixed(2);
+                    const totalGb = (ev.total / 1e9).toFixed(2);
+                    status.textContent = `${st} — ${doneGb} GB / ${totalGb} GB`;
+                    progressFill.style.width = pct + '%';
+                    progressPct.textContent = pct + '%';
+                } else {
+                    status.textContent = st;
+                }
+            }
+        }
+
+        status.className = 'pull-status success';
+        status.textContent = `Pulled '${modelTag}' successfully.`;
+        progressFill.style.width = '100%';
+        progressPct.textContent = '100%';
+        await loadPulledModels();
+    } catch (e) {
+        status.className = 'pull-status error';
+        status.textContent = 'Error: ' + e.message;
+        progressWrap.hidden = true;
     } finally {
         btn.disabled = false;
         btn.textContent = '⬇';
@@ -1246,6 +1563,8 @@ function buildSkillCard(id, info) {
         ? `<div class="skill-missing">⚠ Requires: ${info.missing.join(', ')}</div>` : '';
     const installHtml = info.install
         ? `<code class="skill-install" title="Click to copy">${escapeHtml(info.install)}</code>` : '';
+    const modelHtml = info.model_label
+        ? `<div class="skill-model-tag">🤖 ${escapeHtml(info.model_label)}</div>` : '';
     const actions = [];
     if (id === 'text_to_diagram') {
         actions.push(`<button class="btn-sm" onclick="openTextToDiagramSkill()">Open</button>`);
@@ -1265,6 +1584,7 @@ function buildSkillCard(id, info) {
         </div>
         <div class="skill-cat">${info.category}</div>
         <div class="skill-desc">${info.description}</div>
+        ${modelHtml}
         ${missingHtml}
         ${installHtml}
         ${actionsHtml}

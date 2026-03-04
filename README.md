@@ -87,29 +87,68 @@ Single-page app at `http://localhost:8420` using a sidebar layout inspired by Op
 
 ---
 
-## Skills
+## Concepts
 
-Skills are specialised capabilities the agent can perform. A skill is **Ready** when all required powers and packages are available.
+### 🤖 Models
+Model weights that power intelligent inference. Three categories live in this project:
 
-| Icon | Skill | Category | Status |
-|------|-------|----------|--------|
-| ✍️ | Write Research Blog | Content | ✅ Ready |
-| 📰 | Weekly Digest | Content | ✅ Ready |
-| 📧 | Email Reports | Content | ⚡ Needs Power (Email) |
-| 🎥 | Video Understanding | Vision | ⚡ Needs Power (Vid-LLMs) |
-| 🔍 | Object Detection | Vision | ⚡ Needs Power (2D Image Processing) |
-| 🎯 | Object Tracking | Vision | ⚡ Needs Power (2D Image Processing) |
-| ✂️ | Image Segmentation | Vision | ⚡ Needs Power (2D Image Processing) |
-| 🧩 | Instance Segmentation | Vision | ⚡ Needs Power (2D Image Processing) |
-| 📋 | Paper → Spec | Research | ✅ Ready |
-| 🕸️ | Knowledge Graph | Research | ✅ Ready |
-| ∑ | Equation Extraction | Research | ✅ Ready |
-| 📄 | Document Text Extraction | Research | ⚡ Needs Power (OCR) |
-| 🏆 | Kaggle Competition | ML | ⚡ Needs Power (Kaggle) |
-| 🎯 | Model Fine-Tuning | ML | ⚡ Needs Power (HuggingFace / Azure ML) |
-| 📊 | Dataset Analysis | ML | ✅ Ready |
+| Type | Where | Examples |
+|------|-------|---------|
+| **Ollama models** | Pulled via `ollama pull` | qwen2.5vl, qwen3-vl, olmocr2 (VLMs / LLMs) |
+| **Local HF models** | Downloaded to `output/.models/` | SD-Turbo, SAM 2/3, Monkey OCR 1.5, SVD |
+| **pip-based models** | Auto-download on first use | PaddleOCR |
 
-**6 / 15 skills ready** out of the box. Unlock the rest by configuring the relevant Powers.
+Models are managed from the **Models** view — pull Ollama models, download HuggingFace weights, track disk usage, and monitor health of local inference servers.
+
+---
+
+### ⚡ Skills
+A **Skill** is a named, composable capability built from one or more of:
+
+- **Models** — AI/ML weights that provide intelligence (e.g. SAM 3 for segmentation, SD-Turbo for generation)
+- **Algorithms** — Classical CV methods (e.g. feature matching for stitching, RANSAC, optical flow)
+- **Open-source libraries** — MIT / Apache 2.0 / BSD-3 only (e.g. `kornia`, `diffusers`, `supervision`, `torchvision`)
+- **Powers** *(optional)* — External integrations needed for some skills (e.g. HuggingFace token, Email SMTP)
+
+Skills show three states in the UI:
+
+| Badge | Meaning |
+|-------|---------|
+| ✅ **Ready** | All dependencies and powers present — skill is fully operational |
+| 📦 **Needs Install** | Missing a Python package — shown with `pip install …` command |
+| ⚡ **Needs Power** | Requires an external integration or API key to be configured |
+
+**Current skill catalogue:**
+
+| Icon | Skill | Category | Powered By | Status |
+|------|-------|----------|-----------|--------|
+| 🖼️ | 2D Image Processing | Vision | Pillow · OpenCV (Apache 2.0) | ✅ Ready |
+| 🧊 | 3D Image Processing | Vision | open3d · trimesh (MIT/Apache) | 📦 `pip install open3d` |
+| 🎥 | Video Understanding | Vision | opencv-python · decord (Apache 2.0) | 📦 `pip install opencv-python` |
+| 🧩 | Image Stitching | Vision | OpenCV Stitcher (Apache 2.0) | 📦 `pip install opencv-python` |
+| 🎯 | Object Detection | Vision | torchvision (BSD-3) · transformers RT-DETR (Apache 2.0) | 📦 `pip install torchvision` |
+| 📡 | Object Tracking | Vision | supervision + ByteTrack/SORT (MIT) | 📦 `pip install supervision` |
+| 🖼️ | Text → Image | Vision | diffusers (Apache 2.0) + SD-Turbo / SDXL-Turbo models | 📦 `pip install diffusers` |
+| 🔭 | Super Resolution | Vision | spandrel (MIT) — ESRGAN · SwinIR · HAT | 📦 `pip install spandrel` |
+| ✨ | Image Denoising | Vision | kornia (Apache 2.0) — Gaussian · bilateral · NLM | 📦 `pip install kornia` |
+| 📄 | Image Document Extraction | Vision | Monkey OCR 1.5 (default) · PaddleOCR fallback | ✅ Ready (Monkey OCR downloaded) |
+| ✍️ | Write Research Blog | Content | search_arxiv · web_search · file_write | ✅ Ready |
+| 📰 | Weekly Digest | Content | search_arxiv · web_search · file_write | ✅ Ready |
+| 📧 | Email Reports | Content | SMTP | ⚡ Needs Power (Email) |
+| 📋 | Paper → Spec | Research | fetch_arxiv_paper · extract_equations | ✅ Ready |
+| 🕸️ | Knowledge Graph | Research | Obsidian vault · graph.py | ✅ Ready |
+| ∑ | Equation Extraction | Research | LaTeX parser · PDF tools | ✅ Ready |
+| 🧭 | Text → Diagram | Research | paperbanana · Ollama · matplotlib | 📦 `pip install -e paperbanana/` |
+| 🏆 | Kaggle Competition | ML / Training | Kaggle API | ⚡ Needs Power (Kaggle) |
+| 🎯 | Model Fine-Tuning | ML / Training | HuggingFace Trainer · Azure ML | ⚡ Needs Power (HF / Azure) |
+| 📊 | Dataset Analysis | ML / Training | shell · file_read · analyze_image | ✅ Ready |
+
+**6 / 20 skills ready** out of the box. Install packages or configure Powers to unlock the rest.
+
+---
+
+### 🔌 Powers
+A **Power** is an external resource, integration, or API key that extends what the agent can access. Powers are configured from the **Powers** view — no manual `.env` editing required.
 
 ---
 
@@ -136,8 +175,6 @@ Per-agent model overrides: set `BLOG_WRITER_MODEL`, `WEBSITE_AGENT_MODEL`, `TRAI
 ---
 
 ## Powers
-
-Powers are external resources and integrations. Active powers unlock additional skills and expand what the agent can do.
 
 ### 🔌 Built-in (always available)
 
