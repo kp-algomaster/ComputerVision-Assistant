@@ -188,7 +188,7 @@ rm -rf src/zeroclaw_tools/   # zero other changes required
 
 ```bash
 git clone https://github.com/kp-algomaster/ComputerVision-Assistant
-cd CV_Zero_Claw_Agent
+cd ComputerVision-Assistant
 
 python -m venv .venv
 source .venv/bin/activate
