@@ -542,6 +542,276 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
             ],
         })
 
+    # ── Powers ─────────────────────────────────────────────────────────────
+
+    @app.get("/api/powers")
+    async def list_powers():
+        """Return status of all agent powers (resource access / integrations)."""
+        import importlib.util as _ilu
+
+        def _e(k: str) -> str: return os.environ.get(k, "").strip()
+        def _has(*keys: str) -> bool: return all(_e(k) for k in keys)
+        def _pkg(n: str) -> bool: return _ilu.find_spec(n) is not None
+        def _mask(v: str) -> str: return ("•" * max(0, len(v) - 4) + v[-4:]) if v else ""
+
+        powers = {
+            "internet_search": {
+                "label": "Internet Search", "icon": "🔍", "category": "built-in",
+                "description": "Search the web for current research, news, and documentation.",
+                "status": "active",
+                "detail": "DuckDuckGo (ddgs)" + (" + Brave Search API" if _e("BRAVE_API_KEY") else " — set BRAVE_API_KEY for higher quality"),
+                "configurable": True,
+                "fields": [{"key": "BRAVE_API_KEY", "label": "Brave API Key", "secret": True, "placeholder": "BSA..."}],
+                "field_values": {"BRAVE_API_KEY": _mask(_e("BRAVE_API_KEY"))},
+            },
+            "file_system": {
+                "label": "Local File System", "icon": "📁", "category": "built-in",
+                "description": "Read and write files on the local machine via ZeroClaw built-in tools.",
+                "status": "active",
+                "detail": "file_read · file_write · shell (ZeroClaw built-in)",
+                "configurable": False,
+            },
+            "arxiv": {
+                "label": "ArXiv", "icon": "📚", "category": "built-in",
+                "description": "Search and fetch papers from ArXiv across cs.CV, cs.AI, cs.LG and more.",
+                "status": "active",
+                "detail": "Free public API — no key required",
+                "configurable": False,
+            },
+            "semantic_scholar": {
+                "label": "Semantic Scholar", "icon": "🔬", "category": "built-in",
+                "description": "Search papers with citation counts and author data.",
+                "status": "active" if _has("SEMANTIC_SCHOLAR_API_KEY") else "limited",
+                "detail": "API key set — full access" if _has("SEMANTIC_SCHOLAR_API_KEY") else "No key — rate limited. Add SEMANTIC_SCHOLAR_API_KEY for full access.",
+                "configurable": True,
+                "fields": [{"key": "SEMANTIC_SCHOLAR_API_KEY", "label": "API Key", "secret": True, "placeholder": "optional"}],
+                "field_values": {"SEMANTIC_SCHOLAR_API_KEY": _mask(_e("SEMANTIC_SCHOLAR_API_KEY"))},
+            },
+            "email": {
+                "label": "Email (SMTP)", "icon": "📧", "category": "integration",
+                "description": "Send research summaries, paper alerts, and digest reports via email.",
+                "status": "active" if _has("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD") else "inactive",
+                "detail": f"SMTP: {_e('SMTP_HOST') or 'not configured'}",
+                "configurable": True,
+                "fields": [
+                    {"key": "SMTP_HOST", "label": "SMTP Host", "secret": False, "placeholder": "smtp.gmail.com"},
+                    {"key": "SMTP_PORT", "label": "Port", "secret": False, "placeholder": "587"},
+                    {"key": "SMTP_USER", "label": "Username", "secret": False, "placeholder": "you@gmail.com"},
+                    {"key": "SMTP_PASSWORD", "label": "App Password", "secret": True, "placeholder": ""},
+                    {"key": "SMTP_FROM", "label": "From Address", "secret": False, "placeholder": "cv-agent@example.com"},
+                    {"key": "SMTP_TO", "label": "Default Recipient", "secret": False, "placeholder": "you@example.com"},
+                ],
+                "field_values": {
+                    "SMTP_HOST": _e("SMTP_HOST"), "SMTP_PORT": _e("SMTP_PORT"),
+                    "SMTP_USER": _e("SMTP_USER"), "SMTP_PASSWORD": "••••" if _e("SMTP_PASSWORD") else "",
+                    "SMTP_FROM": _e("SMTP_FROM"), "SMTP_TO": _e("SMTP_TO"),
+                },
+            },
+            "huggingface": {
+                "label": "HuggingFace Hub", "icon": "🤗", "category": "integration",
+                "description": "Access private models, datasets, and run inference via HF Hub.",
+                "status": "active" if _has("HF_TOKEN") else "inactive",
+                "detail": "Token set — private models accessible" if _has("HF_TOKEN") else "No HF_TOKEN — public models only",
+                "configurable": True,
+                "fields": [{"key": "HF_TOKEN", "label": "Access Token", "secret": True, "placeholder": "hf_..."}],
+                "field_values": {"HF_TOKEN": _mask(_e("HF_TOKEN"))},
+            },
+            "kaggle": {
+                "label": "Kaggle", "icon": "🏆", "category": "integration",
+                "description": "Download competition datasets, submit predictions, and monitor leaderboards.",
+                "status": "active" if _has("KAGGLE_USERNAME", "KAGGLE_KEY") else "inactive",
+                "detail": f"User: {_e('KAGGLE_USERNAME') or 'not configured'}",
+                "configurable": True,
+                "fields": [
+                    {"key": "KAGGLE_USERNAME", "label": "Username", "secret": False, "placeholder": "your-kaggle-name"},
+                    {"key": "KAGGLE_KEY", "label": "API Key", "secret": True, "placeholder": "from kaggle.com → Settings"},
+                ],
+                "field_values": {"KAGGLE_USERNAME": _e("KAGGLE_USERNAME"), "KAGGLE_KEY": _mask(_e("KAGGLE_KEY"))},
+            },
+            "github": {
+                "label": "GitHub", "icon": "🐙", "category": "integration",
+                "description": "Read/write repos, open issues, search code, and manage CI workflows.",
+                "status": "active" if _has("GITHUB_TOKEN") else "inactive",
+                "detail": "Token set — repo access enabled" if _has("GITHUB_TOKEN") else "No GITHUB_TOKEN — public repos only",
+                "configurable": True,
+                "fields": [{"key": "GITHUB_TOKEN", "label": "Personal Access Token", "secret": True, "placeholder": "ghp_..."}],
+                "field_values": {"GITHUB_TOKEN": _mask(_e("GITHUB_TOKEN"))},
+            },
+            "azure_ml": {
+                "label": "Azure ML", "icon": "☁️", "category": "cloud",
+                "description": "Submit distributed training and fine-tuning jobs to Azure ML compute clusters.",
+                "status": "active" if _has("AZURE_SUBSCRIPTION_ID", "AZURE_ML_WORKSPACE") else "inactive",
+                "detail": f"Workspace: {_e('AZURE_ML_WORKSPACE') or 'not configured'}",
+                "configurable": True,
+                "fields": [
+                    {"key": "AZURE_SUBSCRIPTION_ID", "label": "Subscription ID", "secret": False, "placeholder": "xxxxxxxx-xxxx-..."},
+                    {"key": "AZURE_RESOURCE_GROUP", "label": "Resource Group", "secret": False, "placeholder": "my-rg"},
+                    {"key": "AZURE_ML_WORKSPACE", "label": "Workspace Name", "secret": False, "placeholder": "my-aml-workspace"},
+                    {"key": "AZURE_ML_COMPUTE", "label": "Compute Target", "secret": False, "placeholder": "gpu-cluster"},
+                    {"key": "AZURE_CLIENT_ID", "label": "Service Principal ID", "secret": True, "placeholder": ""},
+                    {"key": "AZURE_CLIENT_SECRET", "label": "SP Secret", "secret": True, "placeholder": ""},
+                    {"key": "AZURE_TENANT_ID", "label": "Tenant ID", "secret": True, "placeholder": ""},
+                ],
+                "field_values": {
+                    "AZURE_SUBSCRIPTION_ID": _e("AZURE_SUBSCRIPTION_ID"),
+                    "AZURE_RESOURCE_GROUP": _e("AZURE_RESOURCE_GROUP"),
+                    "AZURE_ML_WORKSPACE": _e("AZURE_ML_WORKSPACE"),
+                    "AZURE_ML_COMPUTE": _e("AZURE_ML_COMPUTE"),
+                    "AZURE_CLIENT_ID": "••••" if _e("AZURE_CLIENT_ID") else "",
+                    "AZURE_CLIENT_SECRET": "••••" if _e("AZURE_CLIENT_SECRET") else "",
+                    "AZURE_TENANT_ID": "••••" if _e("AZURE_TENANT_ID") else "",
+                },
+            },
+            "runpod": {
+                "label": "RunPod / GPU Cloud", "icon": "🚀", "category": "cloud",
+                "description": "Rent on-demand GPU pods for training and inference at low cost.",
+                "status": "active" if _has("RUNPOD_API_KEY") else "inactive",
+                "detail": "API key set" if _has("RUNPOD_API_KEY") else "No RUNPOD_API_KEY set",
+                "configurable": True,
+                "fields": [{"key": "RUNPOD_API_KEY", "label": "API Key", "secret": True, "placeholder": "from runpod.io → Settings"}],
+                "field_values": {"RUNPOD_API_KEY": _mask(_e("RUNPOD_API_KEY"))},
+            },
+        }
+        return JSONResponse(powers)
+
+    @app.post("/api/powers/{power_id}/configure")
+    async def configure_power(power_id: str, body: dict):
+        """Update credentials for a power. Persists to .env."""
+        fields: dict = body.get("fields", {})
+        updates: dict[str, str] = {}
+        for key, value in fields.items():
+            v = str(value) if value is not None else ""
+            if v and not v.startswith("••"):
+                os.environ[key] = v
+                updates[key] = v
+        env_path = _PROJECT_ROOT / ".env"
+        if env_path.exists() and updates:
+            lines = env_path.read_text().splitlines()
+            written: set[str] = set()
+            new_lines = []
+            for line in lines:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#") and "=" in stripped:
+                    k = stripped.split("=", 1)[0].strip()
+                    if k in updates:
+                        new_lines.append(f"{k}={updates[k]}")
+                        written.add(k)
+                        continue
+                new_lines.append(line)
+            for k, v in updates.items():
+                if k not in written:
+                    new_lines.append(f"{k}={v}")
+            env_path.write_text("\n".join(new_lines) + "\n")
+        return JSONResponse({"ok": True, "updated": list(updates.keys())})
+
+    # ── Skills ─────────────────────────────────────────────────────────────
+
+    @app.get("/api/skills")
+    async def list_skills():
+        """Return agent skills with readiness status based on active powers and installed packages."""
+        import importlib.util as _ilu
+
+        def _e(k: str) -> str: return os.environ.get(k, "").strip()
+        def _has(*keys: str) -> bool: return all(_e(k) for k in keys)
+        def _pkg(n: str) -> bool: return _ilu.find_spec(n) is not None
+
+        has_kaggle = _has("KAGGLE_USERNAME", "KAGGLE_KEY")
+        has_email  = _has("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD")
+        has_azure  = _has("AZURE_SUBSCRIPTION_ID", "AZURE_ML_WORKSPACE")
+        has_hf     = bool(_e("HF_TOKEN"))
+        has_3d     = _pkg("open3d") or _pkg("trimesh") or _pkg("pyntcloud")
+        has_video  = _pkg("cv2") or _pkg("decord")
+
+        skills = {
+            "research_blog": {
+                "label": "Write Research Blog", "icon": "✍️", "category": "content",
+                "description": "Generate weekly digest posts, paper summaries, and deep-dive articles on CV breakthroughs.",
+                "status": "ready",
+                "tools": ["search_arxiv", "web_search", "file_write"],
+                "missing": [],
+            },
+            "weekly_digest": {
+                "label": "Weekly Digest", "icon": "📰", "category": "content",
+                "description": "Curated weekly magazine of CV breakthroughs — auto-pulled from ArXiv and web, formatted as Markdown.",
+                "status": "ready",
+                "tools": ["search_arxiv", "web_search", "file_write"],
+                "missing": [],
+            },
+            "email_reports": {
+                "label": "Email Reports", "icon": "📧", "category": "content",
+                "description": "Send automated digest emails and paper alerts to a recipient list.",
+                "status": "ready" if has_email else "needs-power",
+                "tools": [],
+                "missing": [] if has_email else ["Email power"],
+            },
+            "2d_image_processing": {
+                "label": "2D Image Processing", "icon": "🖼️", "category": "vision",
+                "description": "Analyse, describe, and compare 2D images using VLMs (Qwen2.5-VL, LLaVA) and MLX vision models.",
+                "status": "ready",
+                "tools": ["analyze_image", "describe_image", "compare_images", "pull_vision_model"],
+                "missing": [],
+            },
+            "3d_image_processing": {
+                "label": "3D Image Processing", "icon": "🧊", "category": "vision",
+                "description": "Process point clouds, depth maps, mesh data, and NeRF outputs using Open3D or Trimesh.",
+                "status": "ready" if has_3d else "needs-install",
+                "tools": ["shell", "file_read"],
+                "missing": [] if has_3d else ["open3d or trimesh"],
+                "install": None if has_3d else "pip install open3d",
+            },
+            "video_understanding": {
+                "label": "Video Understanding", "icon": "🎥", "category": "vision",
+                "description": "Analyse video streams, extract key frames, and understand temporal patterns in CV datasets.",
+                "status": "ready" if has_video else "needs-install",
+                "tools": ["analyze_image", "shell"],
+                "missing": [] if has_video else ["opencv-python or decord"],
+                "install": None if has_video else "pip install opencv-python",
+            },
+            "paper_to_spec": {
+                "label": "Paper → Spec", "icon": "📋", "category": "research",
+                "description": "Convert papers to spec.md files with equations, architecture diagrams, and implementation requirements.",
+                "status": "ready",
+                "tools": ["fetch_arxiv_paper", "extract_equations", "generate_spec"],
+                "missing": [],
+            },
+            "knowledge_graph": {
+                "label": "Knowledge Graph", "icon": "🕸️", "category": "research",
+                "description": "Build and query Obsidian-compatible vaults linking papers, methods, datasets, and concepts.",
+                "status": "ready",
+                "tools": ["add_paper_to_graph", "query_graph", "export_graph"],
+                "missing": [],
+            },
+            "equation_extraction": {
+                "label": "Equation Extraction", "icon": "∑", "category": "research",
+                "description": "Extract LaTeX equations, loss functions, and mathematical formulations from PDF papers.",
+                "status": "ready",
+                "tools": ["extract_equations", "extract_key_info"],
+                "missing": [],
+            },
+            "kaggle_competition": {
+                "label": "Kaggle Competition", "icon": "🏆", "category": "ml",
+                "description": "Analyse tasks, download datasets, build baselines, and submit competition predictions.",
+                "status": "ready" if has_kaggle else "needs-power",
+                "tools": ["web_search", "shell", "file_read", "file_write"],
+                "missing": [] if has_kaggle else ["Kaggle power"],
+            },
+            "model_fine_tuning": {
+                "label": "Model Fine-Tuning", "icon": "🎯", "category": "ml",
+                "description": "Fine-tune vision models with HuggingFace Trainer locally or on Azure ML compute clusters.",
+                "status": "ready" if (has_hf or has_azure) else "needs-power",
+                "tools": ["shell", "file_read", "file_write"],
+                "missing": ([] if has_hf else ["HuggingFace power"]) + ([] if has_azure else ["Azure ML power"]),
+            },
+            "dataset_analysis": {
+                "label": "Dataset Analysis", "icon": "📊", "category": "ml",
+                "description": "Profile CV datasets, compute statistics, visualise class distributions and annotation quality.",
+                "status": "ready",
+                "tools": ["shell", "file_read", "analyze_image"],
+                "missing": [],
+            },
+        }
+        return JSONResponse(skills)
+
     return app
 
 

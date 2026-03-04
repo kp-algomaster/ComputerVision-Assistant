@@ -214,6 +214,34 @@
                 </div>
             </div>
 
+            <!-- Powers -->
+            <div class="cap-section" id="powersSection">
+                <div class="cap-section-header">
+                    <div>
+                        <h2>⚡ Powers</h2>
+                        <p class="cap-section-hint">External resources and integrations available to the agent. Active powers unlock additional skills.</p>
+                    </div>
+                    <button class="btn-sm" onclick="loadPowers()">↻ Refresh</button>
+                </div>
+                <div id="powersGrid" class="powers-grid">
+                    <p class="placeholder">Loading…</p>
+                </div>
+            </div>
+
+            <!-- Skills -->
+            <div class="cap-section" id="skillsSection">
+                <div class="cap-section-header">
+                    <div>
+                        <h2>🎯 Skills</h2>
+                        <p class="cap-section-hint">Specialized capabilities the agent can perform. Skills marked <em>Needs Power</em> require an active power to unlock.</p>
+                    </div>
+                    <button class="btn-sm" onclick="loadSkills()">↻ Refresh</button>
+                </div>
+                <div id="skillsGrid" class="skills-grid">
+                    <p class="placeholder">Loading…</p>
+                </div>
+            </div>
+
         </section>
     </main>
 

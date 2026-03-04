@@ -490,7 +490,11 @@ async function loadDigest(filename) {
 // ── Config / Model Management ──
 
 async function loadConfig() {
-    await Promise.all([loadZeroClawStatus(), loadHardwareAndRecommended(), loadPulledModels(), loadIntegrations()]);
+    await Promise.all([
+        loadZeroClawStatus(), loadHardwareAndRecommended(),
+        loadPulledModels(), loadIntegrations(),
+        loadPowers(), loadSkills(),
+    ]);
 }
 
 async function loadZeroClawStatus() {
@@ -865,6 +869,180 @@ async function testIntegration(id) {
     } finally {
         btn.disabled = false;
     }
+}
+
+// ── Powers ──
+
+const _CAT_ORDER_POWERS = ['built-in', 'integration', 'cloud'];
+const _CAT_LABELS_POWERS = { 'built-in': '🔌 Built-in', 'integration': '🔗 Integrations', 'cloud': '☁️ Cloud Compute' };
+
+async function loadPowers() {
+    const grid = document.getElementById('powersGrid');
+    try {
+        const resp = await fetch('/api/powers');
+        const data = await resp.json();
+        grid.innerHTML = '';
+
+        // Group by category
+        const groups = {};
+        for (const [id, info] of Object.entries(data)) {
+            const cat = info.category || 'integration';
+            (groups[cat] = groups[cat] || []).push([id, info]);
+        }
+        for (const cat of _CAT_ORDER_POWERS) {
+            if (!groups[cat]) continue;
+            const label = document.createElement('div');
+            label.className = 'cap-group-label';
+            label.textContent = _CAT_LABELS_POWERS[cat] || cat;
+            grid.appendChild(label);
+            for (const [id, info] of groups[cat]) {
+                grid.appendChild(buildPowerCard(id, info));
+            }
+        }
+    } catch (e) {
+        grid.innerHTML = '<p class="placeholder">Failed to load powers.</p>';
+    }
+}
+
+function buildPowerCard(id, info) {
+    const card = document.createElement('div');
+    card.className = `pwr-card ${info.status}`;
+    card.id = `pwr-card-${id}`;
+
+    const fieldsHtml = info.configurable && info.fields ? info.fields.map(f => `
+        <div class="pwr-field">
+            <label>${f.label}</label>
+            <input type="${f.secret ? 'password' : 'text'}"
+                   id="pwr-${id}-${f.key}"
+                   placeholder="${escapeHtml(f.placeholder || '')}"
+                   value="${escapeHtml((info.field_values || {})[f.key] || '')}" />
+        </div>`).join('') : '';
+
+    const cfgBtn = info.configurable
+        ? `<button class="int-btn" onclick="togglePowerForm('${id}')">⚙ Configure</button>` : '';
+
+    card.innerHTML = `
+        <div class="pwr-head">
+            <span class="pwr-icon">${info.icon}</span>
+            <div class="pwr-info">
+                <div class="pwr-title">
+                    ${info.label}
+                    <span class="status-badge ${info.status}">${info.status.replace('-', ' ')}</span>
+                </div>
+                <div class="pwr-desc">${info.description}</div>
+            </div>
+        </div>
+        <div class="pwr-detail">${info.detail || ''}</div>
+        ${cfgBtn ? `<div class="pwr-actions">${cfgBtn}</div>` : ''}
+        <div class="pwr-form" id="pwr-form-${id}">
+            ${fieldsHtml}
+            <div class="pwr-save-row">
+                <button class="int-btn primary" onclick="savePower('${id}')">Save</button>
+                <span class="pwr-save-status" id="pwr-save-status-${id}"></span>
+            </div>
+        </div>`;
+    return card;
+}
+
+function togglePowerForm(id) {
+    document.getElementById(`pwr-form-${id}`).classList.toggle('open');
+}
+
+async function savePower(id) {
+    const statusEl = document.getElementById(`pwr-save-status-${id}`);
+    statusEl.className = 'pwr-save-status';
+    statusEl.textContent = 'Saving…';
+
+    const fields = {};
+    document.querySelectorAll(`#pwr-form-${id} input[id^="pwr-${id}-"]`).forEach(input => {
+        const key = input.id.replace(`pwr-${id}-`, '');
+        if (input.value && !input.value.match(/^•+/)) {
+            fields[key] = input.value;
+        }
+    });
+
+    try {
+        const resp = await fetch(`/api/powers/${id}/configure`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields }),
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || 'Unknown error');
+        statusEl.className = 'pwr-save-status ok';
+        statusEl.textContent = `Saved ${data.updated.length} key${data.updated.length !== 1 ? 's' : ''}`;
+        // Refresh both powers (status changes) and skills (power dependencies)
+        await Promise.all([loadPowers(), loadSkills()]);
+    } catch (e) {
+        statusEl.className = 'pwr-save-status error';
+        statusEl.textContent = e.message;
+    }
+}
+
+// ── Skills ──
+
+const _CAT_ORDER_SKILLS = ['vision', 'research', 'content', 'ml'];
+const _CAT_LABELS_SKILLS = { vision: '👁️ Vision', research: '🔬 Research', content: '✍️ Content', ml: '⚙️ ML / Training' };
+
+async function loadSkills() {
+    const grid = document.getElementById('skillsGrid');
+    try {
+        const resp = await fetch('/api/skills');
+        const data = await resp.json();
+        grid.innerHTML = '';
+
+        const groups = {};
+        for (const [id, info] of Object.entries(data)) {
+            const cat = info.category || 'research';
+            (groups[cat] = groups[cat] || []).push([id, info]);
+        }
+        for (const cat of _CAT_ORDER_SKILLS) {
+            if (!groups[cat]) continue;
+            const label = document.createElement('div');
+            label.className = 'cap-group-label';
+            label.textContent = _CAT_LABELS_SKILLS[cat] || cat;
+            grid.appendChild(label);
+            for (const [id, info] of groups[cat]) {
+                grid.appendChild(buildSkillCard(id, info));
+            }
+        }
+    } catch (e) {
+        grid.innerHTML = '<p class="placeholder">Failed to load skills.</p>';
+    }
+}
+
+function buildSkillCard(_id, info) {
+    const card = document.createElement('div');
+    card.className = `skill-card ${info.status}`;
+
+    const toolsHtml = (info.tools || []).map(t =>
+        `<span class="skill-tool-chip">${t}</span>`).join('');
+
+    const missingHtml = (info.missing || []).length
+        ? `<div class="skill-missing">⚠ Requires: ${info.missing.join(', ')}</div>` : '';
+
+    const installHtml = info.install
+        ? `<code class="skill-install" title="Click to copy">${escapeHtml(info.install)}</code>` : '';
+
+    card.innerHTML = `
+        <div class="skill-head">
+            <span class="skill-icon">${info.icon}</span>
+            <span class="skill-title">${info.label}</span>
+            <span class="status-badge ${info.status}">${info.status.replace('-', ' ')}</span>
+        </div>
+        <div class="skill-cat">${info.category}</div>
+        <div class="skill-desc">${info.description}</div>
+        ${missingHtml}
+        ${installHtml}
+        ${toolsHtml ? `<div class="skill-tools">${toolsHtml}</div>` : ''}`;
+
+    // Copy install command on click
+    if (info.install) {
+        card.querySelector('.skill-install')?.addEventListener('click', () => {
+            navigator.clipboard?.writeText(info.install);
+        });
+    }
+    return card;
 }
 
 // ── Helpers ──
