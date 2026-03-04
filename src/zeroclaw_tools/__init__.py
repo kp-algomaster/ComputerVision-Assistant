@@ -90,9 +90,15 @@ def _extract_text_tool_call(content: str) -> tuple[str, dict] | None:
 def _build_tool_prompt(tools: list) -> str:
     """Return the tools section injected into the system prompt for text-mode agents."""
     lines = [
-        "You have access to the following tools. To call a tool, respond with ONLY a "
-        "JSON object in this exact format (no markdown, no extra text):\n"
-        '{"name": "<tool_name>", "arguments": {<args>}}\n',
+        "── TOOL INSTRUCTIONS ──────────────────────────────────────────────\n"
+        "You MUST use a tool whenever the user asks about papers, research, images, "
+        "files, or anything requiring live data. DO NOT answer research or current-events "
+        "questions from memory — call a tool first.\n\n"
+        "To call a tool respond with ONLY a raw JSON object — no markdown, no explanation:\n"
+        '{"name": "<tool_name>", "arguments": {<key>: <value>, ...}}\n\n'
+        "You may call tools multiple times in sequence. After ALL necessary tool calls "
+        "are done, provide your final answer as plain text (not JSON).\n"
+        "────────────────────────────────────────────────────────────────────\n"
         "Available tools:",
     ]
     for t in tools:
@@ -106,11 +112,10 @@ def _build_tool_prompt(tools: list) -> str:
                 )
             except Exception:
                 pass
-        lines.append(f"  - {t.name}({args_desc}): {t.description}")
-    lines.append(
-        "\nAfter receiving a tool result, reason over it and provide your final answer "
-        "as plain text (NOT as a JSON tool call)."
-    )
+        # Include first line of docstring as hint
+        doc = (getattr(t, "description", "") or "").split("\n")[0].strip()
+        lines.append(f"  {t.name}({args_desc}) — {doc}")
+    lines.append("────────────────────────────────────────────────────────────────────")
     return "\n".join(lines)
 
 
@@ -279,29 +284,59 @@ def file_write(path: str, content: str) -> str:
 
 
 @tool
-def web_search(query: str) -> str:
-    """Search the web using DuckDuckGo Instant Answer API.
+def web_search(query: str, max_results: int = 8) -> str:
+    """Search the web for current information, news, and recent research.
+
+    Uses DuckDuckGo full-text search (ddgs) for live results. Falls back to
+    the Brave Search API if BRAVE_API_KEY is set in the environment.
 
     Args:
-        query: Search query string.
+        query:       Search query (be specific — include year for recency).
+        max_results: Number of results to return (default 8).
 
     Returns:
-        Top search results as plain text.
+        Formatted search results with titles, URLs, and snippets.
     """
+    import os as _os
+
+    # ── Brave Search API (higher quality, needs API key) ─────────────────────
+    brave_key = _os.environ.get("BRAVE_API_KEY", "").strip()
+    if brave_key:
+        try:
+            resp = httpx.get(
+                "https://api.search.brave.com/res/v1/web/search",
+                headers={"Accept": "application/json", "X-Subscription-Token": brave_key},
+                params={"q": query, "count": max_results, "freshness": "pm"},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                items = resp.json().get("web", {}).get("results", [])
+                if items:
+                    lines = [f"# Web Search: \"{query}\"\n"]
+                    for i, r in enumerate(items, 1):
+                        lines.append(
+                            f"### {i}. {r.get('title', '')}\n"
+                            f"**URL:** {r.get('url', '')}\n"
+                            f"{r.get('description', '')}\n"
+                        )
+                    return "\n".join(lines)
+        except Exception:
+            pass  # fall through to ddgs
+
+    # ── DuckDuckGo full-text search (ddgs) ───────────────────────────────────
     try:
-        resp = httpx.get(
-            "https://api.duckduckgo.com/",
-            params={"q": query, "format": "json", "no_html": "1", "skip_disambig": "1"},
-            timeout=10,
-        )
-        data = resp.json()
-        results: list[str] = []
-        if data.get("AbstractText"):
-            results.append(data["AbstractText"])
-        for item in data.get("RelatedTopics", [])[:5]:
-            if isinstance(item, dict) and item.get("Text"):
-                results.append(item["Text"])
-        return "\n\n".join(results) if results else "No results found."
+        from ddgs import DDGS
+        results = list(DDGS().text(query, max_results=max_results))
+        if results:
+            lines = [f"# Web Search: \"{query}\"\n"]
+            for i, r in enumerate(results, 1):
+                lines.append(
+                    f"### {i}. {r.get('title', '')}\n"
+                    f"**URL:** {r.get('href', '')}\n"
+                    f"{r.get('body', '')}\n"
+                )
+            return "\n".join(lines)
+        return f"No results found for: {query}"
     except Exception as exc:
         return f"Search error: {exc}"
 

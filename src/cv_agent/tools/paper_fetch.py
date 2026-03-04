@@ -12,7 +12,7 @@ from zeroclaw_tools import tool
 
 logger = logging.getLogger(__name__)
 
-ARXIV_API_BASE = "http://export.arxiv.org/api/query"
+ARXIV_API_BASE = "https://export.arxiv.org/api/query"
 ARXIV_ABS_RE = re.compile(r"arxiv\.org/abs/(\d{4}\.\d{4,5})")
 ARXIV_PDF_RE = re.compile(r"arxiv\.org/pdf/(\d{4}\.\d{4,5})")
 
@@ -39,7 +39,7 @@ def fetch_arxiv_paper(arxiv_url_or_id: str) -> str:
     """
     paper_id = _extract_arxiv_id(arxiv_url_or_id)
 
-    with httpx.Client(timeout=30) as client:
+    with httpx.Client(timeout=30, follow_redirects=True) as client:
         resp = client.get(ARXIV_API_BASE, params={"id_list": paper_id})
         resp.raise_for_status()
 
@@ -94,7 +94,7 @@ def search_arxiv(
         "sortOrder": "descending",
     }
 
-    with httpx.Client(timeout=30) as client:
+    with httpx.Client(timeout=30, follow_redirects=True) as client:
         resp = client.get(ARXIV_API_BASE, params=params)
         resp.raise_for_status()
 
