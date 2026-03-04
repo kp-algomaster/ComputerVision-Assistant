@@ -122,6 +122,14 @@ output:
   digests_dir: "${OUTPUT_DIR:-./output}/digests"
   format: markdown
 
+# Context/response cache
+cache:
+  enabled: "${CACHE_ENABLED:-true}"
+  ttl_llm: 86400      # 24h — LLM response cache
+  ttl_tools: 604800   # 7 days — paper/PDF fetches
+  ttl_search: 3600    # 1h — search results
+  max_history_chars: 32000
+
 # Specialized sub-agents
 agents:
   blog_writer:

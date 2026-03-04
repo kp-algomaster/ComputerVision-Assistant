@@ -10,6 +10,9 @@ import feedparser
 import httpx
 from zeroclaw_tools import tool
 
+from cv_agent.cache import get_cache
+from cv_agent.config import load_config
+
 logger = logging.getLogger(__name__)
 
 ARXIV_API_BASE = "https://export.arxiv.org/api/query"
@@ -38,6 +41,11 @@ def fetch_arxiv_paper(arxiv_url_or_id: str) -> str:
         Paper title, authors, abstract, categories, and links.
     """
     paper_id = _extract_arxiv_id(arxiv_url_or_id)
+    cfg = load_config()
+    cache = get_cache(cfg)
+    cache_key = cache.make_key("arxiv", paper_id)
+    if (hit := cache.get(cache_key)) is not None:
+        return hit
 
     with httpx.Client(timeout=30, follow_redirects=True) as client:
         resp = client.get(ARXIV_API_BASE, params={"id_list": paper_id})
@@ -53,7 +61,7 @@ def fetch_arxiv_paper(arxiv_url_or_id: str) -> str:
     published = entry.get("published", "Unknown")
     pdf_link = f"https://arxiv.org/pdf/{paper_id}.pdf"
 
-    return (
+    result = (
         f"# {entry.get('title', 'Untitled')}\n\n"
         f"**ArXiv ID:** {paper_id}\n"
         f"**Authors:** {authors}\n"
@@ -63,6 +71,8 @@ def fetch_arxiv_paper(arxiv_url_or_id: str) -> str:
         f"**Abstract URL:** https://arxiv.org/abs/{paper_id}\n\n"
         f"## Abstract\n\n{entry.get('summary', 'No abstract available.')}\n"
     )
+    cache.set(cache_key, result, ttl=cfg.cache.ttl_tools, key_hint=f"arxiv:{paper_id}")
+    return result
 
 
 @tool
@@ -83,6 +93,12 @@ def search_arxiv(
     Returns:
         Formatted list of matching papers with titles, authors, and abstracts.
     """
+    cfg = load_config()
+    cache = get_cache(cfg)
+    cache_key = cache.make_key("arxiv_search", query, categories, str(max_results), str(days_back))
+    if (hit := cache.get(cache_key)) is not None:
+        return hit
+
     cat_list = [c.strip() for c in categories.split(",")]
     cat_query = " OR ".join(f"cat:{c}" for c in cat_list)
     full_query = f"({query}) AND ({cat_query})"
@@ -134,7 +150,9 @@ def search_arxiv(
         return f"No recent papers (last {days_back} days) found for: {query}"
 
     header = f"# ArXiv Search: \"{query}\"\n**Found {len(results)} papers**\n\n"
-    return header + "\n---\n\n".join(results)
+    output = header + "\n---\n\n".join(results)
+    cache.set(cache_key, output, ttl=cfg.cache.ttl_search, key_hint=f"arxiv_search:{query}")
+    return output
 
 
 @tool

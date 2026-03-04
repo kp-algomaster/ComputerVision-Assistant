@@ -10,16 +10,22 @@ from pathlib import Path
 import httpx
 from zeroclaw_tools import tool
 
+from cv_agent.cache import get_cache
 from cv_agent.config import load_config
 
 logger = logging.getLogger(__name__)
 
 
-def _call_llm(prompt: str) -> str:
+def _call_llm(prompt: str, ttl: int | None = None) -> str:
     cfg = load_config()
+    model = cfg.agents.model_training.model_override or cfg.llm.model
+    cache = get_cache(cfg)
+    key = cache.make_key(model, prompt)
+    if (hit := cache.get(key)) is not None:
+        return hit
     base_url = cfg.llm.base_url.rstrip("/")
     payload = {
-        "model": cfg.agents.model_training.model_override or cfg.llm.model,
+        "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.2,
         "max_tokens": cfg.llm.max_tokens,
@@ -30,7 +36,9 @@ def _call_llm(prompt: str) -> str:
     with httpx.Client(timeout=180) as client:
         resp = client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        result = resp.json()["choices"][0]["message"]["content"]
+    cache.set(key, result, ttl=ttl or cfg.cache.ttl_llm, key_hint=prompt[:80])
+    return result
 
 
 @tool

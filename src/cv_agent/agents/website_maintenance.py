@@ -8,6 +8,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from zeroclaw_tools import create_agent, web_search, http_request
 
+from cv_agent._history import trim_history
 from cv_agent.config import AgentConfig, load_config
 from cv_agent.tools.website_maintenance import check_url_health, audit_links, check_seo_basics
 
@@ -67,7 +68,7 @@ async def run_website_maintenance_agent(
 
     messages: list[Any] = [SystemMessage(content=SYSTEM_PROMPT)]
     if history:
-        messages.extend(history)
+        messages.extend(trim_history(list(history), config.cache.max_history_chars))
     messages.append(HumanMessage(content=message))
 
     result = await agent.ainvoke({"messages": messages})

@@ -8,6 +8,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from zeroclaw_tools import create_agent, web_search, file_read, file_write, shell
 
+from cv_agent._history import trim_history
 from cv_agent.config import AgentConfig, load_config
 from cv_agent.tools.model_training import (
     generate_training_config,
@@ -83,7 +84,7 @@ async def run_model_training_agent(
 
     messages: list[Any] = [SystemMessage(content=SYSTEM_PROMPT)]
     if history:
-        messages.extend(history)
+        messages.extend(trim_history(list(history), config.cache.max_history_chars))
     messages.append(HumanMessage(content=message))
 
     result = await agent.ainvoke({"messages": messages})

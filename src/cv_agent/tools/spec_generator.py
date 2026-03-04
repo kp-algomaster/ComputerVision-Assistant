@@ -10,6 +10,7 @@ import httpx
 from jinja2 import Environment, FileSystemLoader
 from zeroclaw_tools import tool
 
+from cv_agent.cache import get_cache
 from cv_agent.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,31 @@ Structure your output EXACTLY as follows:
 """
 
 
+def _call_llm(prompt: str, ttl: int | None = None) -> str:
+    cfg = load_config()
+    model = cfg.llm.model
+    cache = get_cache(cfg)
+    key = cache.make_key(model, prompt)
+    if (hit := cache.get(key)) is not None:
+        return hit
+    base_url = cfg.llm.base_url.rstrip("/")
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.2,
+        "max_tokens": cfg.llm.max_tokens,
+    }
+    headers = {}
+    if cfg.llm.api_key:
+        headers["Authorization"] = f"Bearer {cfg.llm.api_key}"
+    with httpx.Client(timeout=180) as client:
+        resp = client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()["choices"][0]["message"]["content"]
+    cache.set(key, result, ttl=ttl or cfg.cache.ttl_tools, key_hint=prompt[:80])
+    return result
+
+
 @tool
 def generate_spec(paper_text: str, paper_title: str = "Untitled Paper") -> str:
     """Generate a spec.md file from paper text for spec-driven development.
@@ -95,7 +121,6 @@ def generate_spec(paper_text: str, paper_title: str = "Untitled Paper") -> str:
         Path to the generated spec.md file and a preview.
     """
     cfg = load_config()
-    base_url = cfg.llm.base_url.rstrip("/")
 
     prompt = (
         f"{SPEC_SYSTEM_PROMPT}\n\n"
@@ -104,20 +129,7 @@ def generate_spec(paper_text: str, paper_title: str = "Untitled Paper") -> str:
         f"{paper_text[:15000]}"
     )
 
-    payload = {
-        "model": cfg.llm.model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.2,
-        "max_tokens": cfg.llm.max_tokens,
-    }
-    headers = {}
-    if cfg.llm.api_key:
-        headers["Authorization"] = f"Bearer {cfg.llm.api_key}"
-
-    with httpx.Client(timeout=180) as client:
-        resp = client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
-        resp.raise_for_status()
-        spec_content = resp.json()["choices"][0]["message"]["content"]
+    spec_content = _call_llm(prompt, ttl=cfg.cache.ttl_tools)
 
     # Save to file
     safe_title = "".join(c if c.isalnum() or c in " -_" else "" for c in paper_title)

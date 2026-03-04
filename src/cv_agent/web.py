@@ -342,6 +342,21 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
         except WebSocketDisconnect:
             logger.info("Agent client disconnected: %s", agent_id)
 
+    # ── Cache API ──────────────────────────────────────────────────────────
+
+    @app.get("/api/cache/stats")
+    async def cache_stats():
+        """Return cache hit/miss stats and disk usage."""
+        from cv_agent.cache import get_cache
+        return JSONResponse(get_cache(config).stats())
+
+    @app.post("/api/cache/clear")
+    async def cache_clear():
+        """Delete expired cache entries. Returns count of deleted files."""
+        from cv_agent.cache import get_cache
+        count = get_cache(config).clear()
+        return JSONResponse({"deleted": count})
+
     # ── Remote Integrations ────────────────────────────────────────────────
 
     _PLATFORMS: dict = {

@@ -8,6 +8,7 @@ import re
 import httpx
 from zeroclaw_tools import tool
 
+from cv_agent.cache import get_cache
 from cv_agent.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -50,13 +51,16 @@ SECTION_KEYWORDS = {
 }
 
 
-def _call_llm(prompt: str) -> str:
-    """Call the configured LLM for text extraction tasks."""
+def _call_llm(prompt: str, ttl: int | None = None) -> str:
     cfg = load_config()
+    model = cfg.llm.model
+    cache = get_cache(cfg)
+    key = cache.make_key(model, prompt)
+    if (hit := cache.get(key)) is not None:
+        return hit
     base_url = cfg.llm.base_url.rstrip("/")
-
     payload = {
-        "model": cfg.llm.model,
+        "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.1,
         "max_tokens": cfg.llm.max_tokens,
@@ -64,11 +68,12 @@ def _call_llm(prompt: str) -> str:
     headers = {}
     if cfg.llm.api_key:
         headers["Authorization"] = f"Bearer {cfg.llm.api_key}"
-
     with httpx.Client(timeout=120) as client:
         resp = client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        result = resp.json()["choices"][0]["message"]["content"]
+    cache.set(key, result, ttl=ttl or cfg.cache.ttl_tools, key_hint=prompt[:80])
+    return result
 
 
 @tool

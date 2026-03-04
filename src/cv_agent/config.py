@@ -140,6 +140,14 @@ class RemoteConnectionsConfig(BaseModel):
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
 
 
+class CacheConfig(BaseModel):
+    enabled: bool = True
+    ttl_llm: int = 86400        # 24h — LLM response cache
+    ttl_tools: int = 604800     # 7 days — paper/PDF fetches
+    ttl_search: int = 3600      # 1h — search results
+    max_history_chars: int = 32000  # ~8k tokens; trim context beyond this
+
+
 class AgentInstanceConfig(BaseModel):
     enabled: bool = True
     model_override: str = ""  # empty = use global config.llm.model
@@ -166,6 +174,7 @@ class AgentConfig(BaseModel):
     output: OutputConfig = Field(default_factory=OutputConfig)
     remote: RemoteConnectionsConfig = Field(default_factory=RemoteConnectionsConfig)
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
+    cache: CacheConfig = Field(default_factory=CacheConfig)
 
 
 def _resolve_env_vars(data: dict | list | str) -> dict | list | str:

@@ -8,6 +8,9 @@ from urllib.parse import urljoin, urlparse
 import httpx
 from zeroclaw_tools import tool
 
+from cv_agent.cache import get_cache
+from cv_agent.config import load_config
+
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 10
@@ -37,6 +40,12 @@ def check_url_health(url: str) -> str:
     """
     import time
 
+    cfg = load_config()
+    cache = get_cache(cfg)
+    cache_key = cache.make_key("url_health", url)
+    if (hit := cache.get(cache_key)) is not None:
+        return hit
+
     results = []
     current = url
     for _ in range(5):  # follow up to 5 redirects manually for reporting
@@ -51,7 +60,9 @@ def check_url_health(url: str) -> str:
             current = urljoin(current, location)
         else:
             break
-    return "\n".join(results)
+    output = "\n".join(results)
+    cache.set(cache_key, output, ttl=cfg.cache.ttl_search, key_hint=f"url_health:{url}")
+    return output
 
 
 @tool
