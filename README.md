@@ -179,7 +179,7 @@ rm -rf src/zeroclaw_tools/   # zero other changes required
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - [Ollama](https://ollama.ai) running locally
 - macOS Apple Silicon recommended (Metal acceleration via MLX)
 - [llmfit](https://github.com/AlexsJones/llmfit) for hardware detection: `brew install llmfit`

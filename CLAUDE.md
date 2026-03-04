@@ -10,7 +10,7 @@
 
 ## Code Style
 
-- Python 3.11+, PydanticV2, ruff line-length 100
+- Python 3.12+, PydanticV2, ruff line-length 100
 - Async-first: use `async/await` for I/O bound operations
 - Tools decorated with `@tool` from `zeroclaw_tools`
 - No docstrings on trivial functions; only where logic isn't self-evident
