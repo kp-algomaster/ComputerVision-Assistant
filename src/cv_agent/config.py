@@ -140,6 +140,19 @@ class RemoteConnectionsConfig(BaseModel):
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
 
 
+class AgentInstanceConfig(BaseModel):
+    enabled: bool = True
+    model_override: str = ""  # empty = use global config.llm.model
+
+
+class AgentsConfig(BaseModel):
+    blog_writer: AgentInstanceConfig = Field(default_factory=AgentInstanceConfig)
+    website_maintenance: AgentInstanceConfig = Field(default_factory=AgentInstanceConfig)
+    model_training: AgentInstanceConfig = Field(default_factory=AgentInstanceConfig)
+    data_visualization: AgentInstanceConfig = Field(default_factory=AgentInstanceConfig)
+    paper_to_code: AgentInstanceConfig = Field(default_factory=AgentInstanceConfig)
+
+
 class AgentConfig(BaseModel):
     name: str = "CV Research Agent"
     description: str = "Autonomous computer vision research agent"
@@ -152,6 +165,7 @@ class AgentConfig(BaseModel):
     spec: SpecConfig = Field(default_factory=SpecConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     remote: RemoteConnectionsConfig = Field(default_factory=RemoteConnectionsConfig)
+    agents: AgentsConfig = Field(default_factory=AgentsConfig)
 
 
 def _resolve_env_vars(data: dict | list | str) -> dict | list | str:

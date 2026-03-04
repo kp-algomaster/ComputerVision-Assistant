@@ -121,3 +121,21 @@ output:
   base_dir: "${OUTPUT_DIR:-./output}"
   digests_dir: "${OUTPUT_DIR:-./output}/digests"
   format: markdown
+
+# Specialized sub-agents
+agents:
+  blog_writer:
+    enabled: true
+    model_override: "${BLOG_WRITER_MODEL:-}"
+  website_maintenance:
+    enabled: true
+    model_override: "${WEBSITE_AGENT_MODEL:-}"
+  model_training:
+    enabled: true
+    model_override: "${TRAINING_AGENT_MODEL:-}"
+  data_visualization:
+    enabled: true
+    model_override: "${VIZ_AGENT_MODEL:-}"
+  paper_to_code:
+    enabled: true
+    model_override: "${PAPER_TO_CODE_MODEL:-}"

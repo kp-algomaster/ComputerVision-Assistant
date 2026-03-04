@@ -241,6 +241,107 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
             "vault_path": config.knowledge.vault_path,
         })
 
+    # ── Sub-Agent API ──────────────────────────────────────────────────────
+
+    from cv_agent.agents import AGENT_REGISTRY
+
+    @app.get("/api/agents")
+    async def list_agents():
+        """List all available sub-agents and their enabled status."""
+        result = []
+        for key, info in AGENT_REGISTRY.items():
+            agent_cfg = getattr(config.agents, info["config_key"])
+            result.append({
+                "id": key,
+                "name": info["name"],
+                "description": info["description"],
+                "icon": info["icon"],
+                "enabled": agent_cfg.enabled,
+                "model": agent_cfg.model_override or config.llm.model,
+            })
+        return JSONResponse({"agents": result})
+
+    @app.get("/api/agents/{agent_id}")
+    async def get_agent(agent_id: str):
+        """Get info for a specific sub-agent."""
+        if agent_id not in AGENT_REGISTRY:
+            return JSONResponse({"error": f"Unknown agent: {agent_id}"}, status_code=404)
+        info = AGENT_REGISTRY[agent_id]
+        agent_cfg = getattr(config.agents, info["config_key"])
+        return JSONResponse({
+            "id": agent_id,
+            "name": info["name"],
+            "description": info["description"],
+            "icon": info["icon"],
+            "enabled": agent_cfg.enabled,
+            "model": agent_cfg.model_override or config.llm.model,
+        })
+
+    @app.websocket("/ws/agent/{agent_id}")
+    async def ws_agent(websocket: WebSocket, agent_id: str):
+        await websocket.accept()
+
+        if agent_id not in AGENT_REGISTRY:
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "content": f"Unknown agent: {agent_id}",
+            }))
+            await websocket.close()
+            return
+
+        info = AGENT_REGISTRY[agent_id]
+        agent_cfg = getattr(config.agents, info["config_key"])
+        if not agent_cfg.enabled:
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "content": f"{info['name']} is disabled.",
+            }))
+            await websocket.close()
+            return
+
+        history: list[Any] = []
+        runner = info["runner"]
+
+        try:
+            while True:
+                data = await websocket.receive_text()
+                msg = json.loads(data)
+                user_text = msg.get("message", "")
+
+                if not user_text.strip():
+                    continue
+
+                await websocket.send_text(json.dumps({"type": "typing", "status": True}))
+
+                try:
+                    response = await runner(user_text, config, history)
+
+                    from langchain_core.messages import HumanMessage
+                    history.append(HumanMessage(content=user_text))
+                    history.append({"role": "assistant", "content": response})
+
+                    await websocket.send_text(json.dumps({
+                        "type": "message",
+                        "role": "assistant",
+                        "content": response,
+                        "html": markdown.markdown(
+                            response,
+                            extensions=["fenced_code", "tables", "codehilite"],
+                        ),
+                        "timestamp": datetime.now().isoformat(),
+                    }))
+                except Exception as e:
+                    logger.exception("Sub-agent error: %s", agent_id)
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "content": f"Agent error: {e}",
+                    }))
+                finally:
+                    await websocket.send_text(json.dumps({"type": "typing", "status": False}))
+
+        except WebSocketDisconnect:
+            logger.info("Agent client disconnected: %s", agent_id)
+
     # ── Remote Integrations ────────────────────────────────────────────────
 
     _PLATFORMS: dict = {

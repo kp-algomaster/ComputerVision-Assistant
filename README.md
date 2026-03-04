@@ -113,6 +113,28 @@ Skills are specialised capabilities the agent can perform. A skill is **Ready** 
 
 ---
 
+## Agents
+
+Agents are standalone, focused AI workers — each with its own system prompt, curated tool set, and dedicated WebSocket endpoint (`/ws/agent/<id>`). They can also be invoked by the main agent via delegation tools.
+
+| Icon | Agent | Description | Status |
+|------|-------|-------------|--------|
+| ✍️ | **Blog Writer** | Writes research blog posts from papers, summaries, or topics. Fetches live paper data before writing. | ✅ Ready |
+| 🌐 | **Website Maintenance** | Audits sites for broken links, uptime, and on-page SEO issues. | ✅ Ready |
+| 🏋️ | **Model Training** | Generates training configs, cost estimates, and full training scripts for any CV model/task. | ✅ Ready |
+| 📊 | **Data Visualization** | Generates matplotlib/plotly chart code and extracts metrics tables from papers. | ✅ Ready |
+| 📄→💻 | **Paper to Code** | Scaffolds complete PyTorch implementations from ArXiv papers — model, training loop, dataset class. | ✅ Ready |
+
+Each agent is accessible via:
+- **Web UI** — select the agent from the sidebar
+- **WebSocket** — `ws://localhost:8420/ws/agent/<id>` (e.g. `blog_writer`, `paper_to_code`)
+- **REST** — `GET /api/agents` lists all agents; `GET /api/agents/<id>` returns agent details
+- **Main agent delegation** — the main agent auto-delegates tasks using `delegate_<agent>` tools
+
+Per-agent model overrides: set `BLOG_WRITER_MODEL`, `WEBSITE_AGENT_MODEL`, `TRAINING_AGENT_MODEL`, `VIZ_AGENT_MODEL`, or `PAPER_TO_CODE_MODEL` in `.env` to use a different model for a specific agent.
+
+---
+
 ## Powers
 
 Powers are external resources and integrations. Active powers unlock additional skills and expand what the agent can do.

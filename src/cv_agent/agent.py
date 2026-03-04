@@ -7,9 +7,16 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from zeroclaw_tools import create_agent, shell, file_read, file_write, web_search, http_request
+from zeroclaw_tools import create_agent, shell, file_read, file_write, web_search, http_request, tool
 
 from cv_agent.config import AgentConfig, OllamaConfig, load_config
+from cv_agent.agents import (
+    run_blog_writer_agent,
+    run_website_maintenance_agent,
+    run_model_training_agent,
+    run_data_visualization_agent,
+    run_paper_to_code_agent,
+)
 from cv_agent.tools.vision import analyze_image, describe_image, compare_images
 from cv_agent.tools.mlx_vision import mlx_analyze_image
 from cv_agent.tools.paper_fetch import fetch_arxiv_paper, search_arxiv, fetch_paper_pdf
@@ -26,6 +33,74 @@ from cv_agent.tools.hardware_probe import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _make_delegation_tools(config: AgentConfig) -> list:
+    """Build @tool wrappers that let the main agent delegate to sub-agents."""
+    delegation: list = []
+
+    if config.agents.blog_writer.enabled:
+        @tool
+        def delegate_blog_writer(task: str) -> str:
+            """Delegate a blog writing task to the Blog Writer Agent.
+
+            Use when the user asks to write, draft, or publish a research blog post.
+            Args:
+                task: The blog writing instruction or topic.
+            """
+            return asyncio.run(run_blog_writer_agent(task, config))
+        delegation.append(delegate_blog_writer)
+
+    if config.agents.website_maintenance.enabled:
+        @tool
+        def delegate_website_maintenance(task: str) -> str:
+            """Delegate a website audit task to the Website Maintenance Agent.
+
+            Use for checking broken links, site health, uptime, or SEO.
+            Args:
+                task: The website audit instruction, including URL(s) to check.
+            """
+            return asyncio.run(run_website_maintenance_agent(task, config))
+        delegation.append(delegate_website_maintenance)
+
+    if config.agents.model_training.enabled:
+        @tool
+        def delegate_model_training(task: str) -> str:
+            """Delegate a training setup task to the Model Training Agent.
+
+            Use for generating training configs, cost estimates, or training scripts.
+            Args:
+                task: The training task description (model, dataset, framework).
+            """
+            return asyncio.run(run_model_training_agent(task, config))
+        delegation.append(delegate_model_training)
+
+    if config.agents.data_visualization.enabled:
+        @tool
+        def delegate_data_visualization(task: str) -> str:
+            """Delegate a visualization task to the Data Visualization Agent.
+
+            Use for generating charts, extracting paper result tables, or plotting data.
+            Args:
+                task: The visualization request or paper to extract metrics from.
+            """
+            return asyncio.run(run_data_visualization_agent(task, config))
+        delegation.append(delegate_data_visualization)
+
+    if config.agents.paper_to_code.enabled:
+        @tool
+        def delegate_paper_to_code(task: str) -> str:
+            """Delegate a paper implementation task to the Paper to Code Agent.
+
+            Use when the user wants to implement a research paper in PyTorch.
+            Args:
+                task: The paper URL/ID or implementation instruction.
+            """
+            return asyncio.run(run_paper_to_code_agent(task, config))
+        delegation.append(delegate_paper_to_code)
+
+    return delegation
+
 
 SYSTEM_PROMPT = """\
 You are an expert Computer Vision research agent with live access to ArXiv, \
@@ -86,6 +161,13 @@ spec-driven development — equations, architecture, implementation requirements
 6. **Weekly Digest**: Generate comprehensive weekly magazine posts covering \
 the latest CV breakthroughs.
 
+7. **Sub-Agent Delegation**: Delegate specialized tasks to focused agents:
+   - `delegate_blog_writer` — write research blog posts
+   - `delegate_website_maintenance` — audit sites for broken links, SEO, health
+   - `delegate_model_training` — generate training configs, scripts, cost estimates
+   - `delegate_data_visualization` — generate charts and extract paper metrics
+   - `delegate_paper_to_code` — scaffold PyTorch implementations from ArXiv papers
+
 When synthesising results from tools:
 - Lead with the most impactful / novel findings
 - Extract core contributions, mathematical formulations, and datasets
@@ -126,6 +208,9 @@ def build_tools(config: AgentConfig) -> list:
     # Add MLX tools if available on Apple Silicon
     if config.vision.mlx.enabled:
         tools.append(mlx_analyze_image)
+
+    # Add sub-agent delegation tools
+    tools.extend(_make_delegation_tools(config))
 
     return tools
 
