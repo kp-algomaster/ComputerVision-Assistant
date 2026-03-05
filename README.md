@@ -82,29 +82,73 @@ flowchart LR
 
 ## Web UI
 
-Single-page app at `http://localhost:8420` with a sidebar navigation containing 15+ views.
+Single-page app at `http://localhost:8420` with a collapsible sidebar containing 6 navigation groups and 16 views.
 
 ---
 
 ## Navigation Views
 
-| Section | View | Description |
-|---------|------|-------------|
-| **Core** | 💬 Chat | WebSocket chat with the main agent |
-| | 🤖 Agents | Specialized sub-agents (Blog Writer, Paper→Code, etc.) |
-| | 📋 Skills | Capability catalog with install/power status |
-| | 🗂️ Datasets | Download and search datasets from HuggingFace & Kaggle |
-| | 🔌 Powers | Configure API keys and external integrations |
-| | 🏥 Health | System health, latency, model status |
-| **Models** | 🤖 Models | Ollama model pull, HF model download, server management |
-| **Research** | 📚 Papers | ArXiv search and paper processing |
-| | 🕸️ Knowledge | Knowledge graph viewer |
-| | 📰 Digest | Weekly research digest |
-| **Tools** | 🖼️ Vision | Image analysis with any Ollama vision model |
-| | 🧭 Text→Diagram | Natural language → Mermaid/architecture diagrams |
-| | ⚙️ Jobs | Scheduled jobs and fine-tuning runs |
-| **System** | 💾 Cache | Prompt cache management |
-| | 🔧 Settings | Agent configuration |
+### 💬 Chat
+
+| View | Description |
+|------|-------------|
+| 💬 **Main Chat** | WebSocket chat with the main CV Assistant agent. Streaming responses, markdown + KaTeX math rendering, syntax-highlighted code blocks. Auto-resizes as the conversation grows. |
+
+---
+
+### 🤖 Agents
+
+| View | Description |
+|------|-------------|
+| 🤖 **All Agents** | Card grid of specialized sub-agents — Blog Writer, Website Maintenance, Model Training, Data Visualization, Paper→Code. Click **Chat** on any card to open a dedicated conversation. |
+| 💬 **Agent Chat** | Per-agent chat with the agent's name, model, and its own WebSocket endpoint (`/ws/agent/<id>`). Hidden in the sidebar until an agent is selected. |
+
+---
+
+### 🖥️ Control
+
+| View | Description |
+|------|-------------|
+| 📊 **Overview** | System health summary: ZeroClaw status, Ollama connectivity, model readiness, and key metrics. |
+| 🔗 **Channels** | Connect the assistant to messaging platforms (Telegram, Discord, Slack, Email). Push research updates, digests, and alerts to your preferred channel. |
+| 🧠 **Models** | Three-section view for all local model infrastructure: |
+| | &nbsp;&nbsp;**Server Management** — Start / Stop / Restart local inference servers (Image Gen on :7860, OCR on :7861, Ollama on :11434). Live Connected / Disconnected status badge, per-server device selector (GPU / CPU / Auto). |
+| | &nbsp;&nbsp;**Model Management** — HuggingFace model catalog (SD-Turbo, SDXL-Turbo, DeepGen 1.0, SAM 2/3, SVD, Monkey OCR). One-click download with live SSE progress bar, delete, and **Downloaded / Ready** badges. |
+| | &nbsp;&nbsp;**Ollama** — Hardware detection via llmfit, list of pulled Ollama models, pull-by-tag input with auto-select, and llmfit-ranked model recommendations for the current hardware. |
+| 📋 **Sessions** | Browse and manage active agent conversation sessions. |
+| ⏰ **Jobs** | Scheduled and on-demand jobs: **Weekly Digest** (auto-runs every Monday) and **Model Fine-Tuning** (configure base model, dataset, columns, epochs, LR, batch size; streams training output via SSE). |
+
+---
+
+### ⚡ Core
+
+| View | Description |
+|------|-------------|
+| ⚡ **Skills** | Grid of composable capabilities grouped by category (Vision, Content, Research, ML/Training). Each card shows status — ✅ Ready, 📦 Needs Install (with `pip install` command), or ⚡ Needs Power. Clicking a skill opens its dedicated sub-view (e.g., **Text→Diagram**). |
+| 🗂️ **Datasets** | Search bar (HuggingFace or Kaggle) with live results showing download count, tags, and size. Pre-configured catalog of 11 datasets — one-click download with SSE progress bar. Downloaded datasets show a 🔬 **Visualize** button that opens an annotation-aware image grid with split tabs, pagination, and lightbox. |
+| 🔌 **Powers** | External integrations and API keys (HuggingFace Hub, Kaggle, Email SMTP, GitHub, Brave Search, Semantic Scholar, etc.). Configure credentials directly from the UI — no manual `.env` editing required. Active powers unlock additional Skills. |
+
+---
+
+### 🔬 Research
+
+| View | Description |
+|------|-------------|
+| 🗂️ **Knowledge Vault** | Split-view browser for the Obsidian vault: left panel is a collapsible file tree of markdown notes, right panel renders the selected note with syntax highlighting and math. |
+| 🕸️ **Knowledge Graph** | Canvas-based interactive graph of connections between papers, concepts, equations, and specs. Nodes are draggable; edges show relationships. Displays node/edge count. |
+| 📝 **Specs** | Split-view: left panel lists all generated `spec.md` files by paper, right panel renders the selected spec with a **Raw** toggle for the source markdown. |
+| 📰 **Digests** | Split-view: left panel lists weekly digest files, right panel renders the selected digest as formatted markdown. |
+
+---
+
+### ⚙️ Settings
+
+| View | Description |
+|------|-------------|
+| ⚙️ **Config** | **ZeroClaw Status** card (library version, registered tools) and **Agent Configuration** card (full rendered view of the loaded `agent_config.yaml`). |
+| 💾 **Cache** | Disk-backed LLM response cache: entry count, total disk usage, and per-entry breakdown. **Clear Expired** removes stale entries without touching live cache. |
+| 🔧 **Debug** | Internal diagnostic information: loaded config values, environment flags, and runtime state. |
+| 📄 **Logs** | Live server log output streamed to the browser with auto-scroll, **Clear**, and **Refresh** controls. |
 
 ---
 
