@@ -4471,6 +4471,27 @@ body {
 }
 
 /* Responsive */
+/* OCR text output */
+.ocr-text-out {
+    width: 100%;
+    resize: vertical;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    padding: 10px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-sizing: border-box;
+}
+
+.ocr-stats {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
 @media (max-width: 768px) {
     .sam3-layout {
         grid-template-columns: 1fr;

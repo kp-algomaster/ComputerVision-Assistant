@@ -28,6 +28,7 @@ from cv_agent.tools.knowledge_graph import add_paper_to_graph, query_graph, expo
 from cv_agent.tools.spec_generator import generate_spec, generate_spec_from_url
 from cv_agent.tools.text_to_diagram import text_to_diagram
 from cv_agent.tools.segment_anything import segment_with_text, segment_with_box, segment_video
+from cv_agent.tools.ocr import run_ocr
 from cv_agent.tools.hardware_probe import (
     check_runnable_models,
     list_available_models,
@@ -248,6 +249,8 @@ def build_tools(config: AgentConfig) -> list:
         segment_with_text,
         segment_with_box,
         segment_video,
+        # PaddleOCR
+        run_ocr,
     ]
 
     # Add MLX tools if available on Apple Silicon

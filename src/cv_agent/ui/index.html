@@ -564,6 +564,69 @@
             </div>
         </section>
 
+        <!-- ═══ OCR Playground ═══ -->
+        <section id="view-ocr" class="view">
+            <div class="view-header">
+                <div><h2>📄 OCR · Text Extraction</h2><p class="view-sub">PaddleOCR — 80+ languages · auto-downloads models</p></div>
+            </div>
+            <div class="view-scroll sam3-scroll">
+                <div class="sam3-layout">
+                    <!-- Canvas panel -->
+                    <div class="sam3-canvas-panel">
+                        <div class="sam3-upload-zone" id="ocrUploadZone">
+                            <input type="file" id="ocrFileInput" accept="image/*" hidden>
+                            <div class="sam3-upload-content" id="ocrUploadContent">
+                                <div class="sam3-upload-icon">🖼️</div>
+                                <p>Drop image here or <button class="btn-link" onclick="event.stopPropagation(); document.getElementById('ocrFileInput').click()">browse</button></p>
+                                <p class="sam3-upload-hint">JPEG · PNG · WebP · BMP</p>
+                            </div>
+                        </div>
+                        <div class="sam3-img-wrap" id="ocrImgWrap" hidden>
+                            <img id="ocrImg" class="sam3-img" draggable="false" alt="">
+                            <img id="ocrResultImg" class="sam3-result-img" hidden alt="OCR overlay">
+                        </div>
+                        <div class="sam3-img-toolbar" id="ocrImgToolbar" hidden>
+                            <button class="btn-sm" onclick="ocrNewImage()">📁 New Image</button>
+                            <span id="ocrImgInfo" class="sam3-img-info"></span>
+                        </div>
+                    </div>
+                    <!-- Side panel -->
+                    <div class="sam3-side-panel">
+                        <div id="ocrStatusBadge" class="sam3-model-badge">Checking…</div>
+
+                        <div class="sam3-section">
+                            <label class="sam3-label" for="ocrLangSelect">Language</label>
+                            <select id="ocrLangSelect" class="sam3-select" style="width:100%">
+                                <option value="en">English</option>
+                                <option value="ch">Chinese (Simplified)</option>
+                                <option value="french">French</option>
+                                <option value="german">German</option>
+                                <option value="japan">Japanese</option>
+                                <option value="korean">Korean</option>
+                                <option value="es">Spanish</option>
+                                <option value="arabic">Arabic</option>
+                                <option value="ru">Russian</option>
+                                <option value="pt">Portuguese</option>
+                                <option value="it">Italian</option>
+                            </select>
+                        </div>
+
+                        <button class="btn-primary sam3-run-btn" id="ocrRunBtn" onclick="_ocrRun()" disabled>
+                            Extract Text
+                        </button>
+                        <div id="ocrError" class="sam3-error" hidden></div>
+                        <div id="ocrStatus" class="sam3-status" hidden></div>
+
+                        <div id="ocrResults" hidden>
+                            <div class="sam3-section-title">Extracted Text</div>
+                            <textarea id="ocrTextOut" class="ocr-text-out" readonly rows="12"></textarea>
+                            <div id="ocrStats" class="ocr-stats"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- ═══ Powers ═══ -->
         <section id="view-powers" class="view">
             <div class="view-header">

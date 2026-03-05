@@ -107,6 +107,7 @@ function switchView(view) {
         agents: loadAgents,
         workflows: loadWorkflows,
         sam3: loadSam3View,
+        ocr: loadOcrView,
     };
     if (loaders[view]) loaders[view]();
 }
@@ -4001,4 +4002,127 @@ function sam3UsePrompt(prompt) {
     setSam3Mode('text');
     document.getElementById('sam3TextPrompt').value = prompt;
     document.getElementById('sam3TextPrompt').focus();
+}
+
+// ── OCR Playground ────────────────────────────────────────────────────────────
+
+const _ocr = { imagePath: null, inited: false };
+
+function loadOcrView() {
+    if (!_ocr.inited) {
+        _ocrInitUpload();
+        _ocr.inited = true;
+    }
+    fetch('/api/ocr/status').then(r => r.json()).then(d => {
+        const badge = document.getElementById('ocrStatusBadge');
+        if (!badge) return;
+        if (d.ready) {
+            badge.textContent = '✓ PaddleOCR ready';
+            badge.style.background = '#1a3320';
+            badge.style.borderColor = '#1a5c30';
+            badge.style.color = '#4caf7a';
+        } else {
+            badge.textContent = '⚠️ PaddleOCR not installed';
+            badge.style.background = '#332200';
+            badge.style.borderColor = '#5a4000';
+            badge.style.color = '#c8a040';
+        }
+    }).catch(() => {});
+}
+
+function _ocrInitUpload() {
+    const zone  = document.getElementById('ocrUploadZone');
+    const input = document.getElementById('ocrFileInput');
+    if (!zone || !input) return;
+
+    zone.addEventListener('click', () => input.click());
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault(); zone.classList.remove('drag-over');
+        const f = e.dataTransfer.files[0];
+        if (f) _ocrLoadFile(f);
+    });
+    input.addEventListener('change', () => {
+        if (input.files[0]) _ocrLoadFile(input.files[0]);
+    });
+}
+
+async function _ocrLoadFile(file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const resp = await fetch('/api/upload-image', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    _ocr.imagePath = data.path;
+
+    const img    = document.getElementById('ocrImg');
+    const wrap   = document.getElementById('ocrImgWrap');
+    const toolbar = document.getElementById('ocrImgToolbar');
+    const zone   = document.getElementById('ocrUploadZone');
+    const info   = document.getElementById('ocrImgInfo');
+    img.src = data.url;
+    img.onload = () => { if (info) info.textContent = `${img.naturalWidth} × ${img.naturalHeight}`; };
+    zone.hidden  = true;
+    wrap.hidden  = false;
+    toolbar.hidden = false;
+    document.getElementById('ocrRunBtn').disabled = false;
+    document.getElementById('ocrResults').hidden   = true;
+    document.getElementById('ocrResultImg').hidden = true;
+    document.getElementById('ocrError').hidden      = true;
+}
+
+async function _ocrRun() {
+    if (!_ocr.imagePath) return;
+    const btn   = document.getElementById('ocrRunBtn');
+    const errEl = document.getElementById('ocrError');
+    const statEl = document.getElementById('ocrStatus');
+    btn.disabled = true;
+    btn.textContent = 'Running…';
+    errEl.hidden  = true;
+    statEl.hidden = false;
+    statEl.textContent = 'Running OCR… (first run downloads models ~0.5 GB)';
+
+    const lang = document.getElementById('ocrLangSelect')?.value || 'en';
+    try {
+        const resp = await fetch('/api/ocr/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_path: _ocr.imagePath, lang }),
+        });
+        const d = await resp.json();
+        statEl.hidden = true;
+        if (d.error) {
+            errEl.textContent = '⚠️ ' + d.error;
+            errEl.hidden = false;
+        } else {
+            document.getElementById('ocrTextOut').value = d.full_text || '';
+            document.getElementById('ocrStats').textContent =
+                `${d.line_count} line${d.line_count !== 1 ? 's' : ''} detected · lang: ${d.lang}`;
+            document.getElementById('ocrResults').hidden = false;
+            if (d.overlay_url) {
+                const ri = document.getElementById('ocrResultImg');
+                ri.src = d.overlay_url + '?t=' + Date.now();
+                ri.hidden = false;
+            }
+        }
+    } catch (err) {
+        statEl.hidden = true;
+        errEl.textContent = '⚠️ ' + err.message;
+        errEl.hidden = false;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Extract Text';
+    }
+}
+
+function ocrNewImage() {
+    _ocr.imagePath = null;
+    document.getElementById('ocrImgWrap').hidden    = true;
+    document.getElementById('ocrImgToolbar').hidden = true;
+    document.getElementById('ocrUploadZone').hidden = false;
+    document.getElementById('ocrResults').hidden    = true;
+    document.getElementById('ocrResultImg').hidden  = true;
+    document.getElementById('ocrRunBtn').disabled   = true;
+    document.getElementById('ocrFileInput').value   = '';
 }

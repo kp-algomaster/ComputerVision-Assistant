@@ -1925,13 +1925,13 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
                 install=None if (_pkg("kornia") or _pkg("skimage")) else "pip install kornia",
             ),
             "document_extraction": _skill(
-                "Image Document Extraction", "📄", "vision",
-                "Extract structured text, tables, and layout from document images using Monkey OCR 1.5 (default) or PaddleOCR.",
-                "ready" if has_any_ocr else "needs-model", ["shell", "file_read", "file_write"],
-                missing=[] if has_any_ocr else ["Monkey OCR 1.5 model"],
-                models=[] if has_monkey_ocr else [{"id": "monkey-ocr", "label": "Monkey OCR 1.5 (~8 GB)"}],
-                model="monkey-ocr" if has_monkey_ocr else ("paddleocr" if has_paddle_ocr else "monkey-ocr"),
-                model_label="Monkey OCR 1.5" if has_monkey_ocr else ("PaddleOCR" if has_paddle_ocr else "Monkey OCR 1.5 (not downloaded)"),
+                "OCR · Text Extraction", "📄", "vision",
+                "Extract text from images and documents in 80+ languages using PaddleOCR (Apache 2.0). Auto-downloads models on first use.",
+                "ready" if has_paddle_ocr else "needs-install", ["shell", "file_read", "file_write"],
+                missing=[] if has_paddle_ocr else ["paddleocr"],
+                packages=[] if has_paddle_ocr else ["paddleocr", "paddlepaddle"],
+                install=None if has_paddle_ocr else "pip install paddleocr paddlepaddle",
+                view="ocr",
             ),
             "paper_to_spec": _skill(
                 "Paper → Spec", "📋", "research",
@@ -2218,6 +2218,38 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
         if "output_path" in result and result["output_path"]:
             result["output_url"] = "/" + result["output_path"].replace("\\", "/").lstrip("/")
 
+        return JSONResponse(result)
+
+    # ── PaddleOCR ──────────────────────────────────────────────────────────
+
+    @app.get("/api/ocr/status")
+    async def ocr_status():
+        import importlib.util as _ilu
+        has_pkg = _ilu.find_spec("paddleocr") is not None
+        return JSONResponse({"ready": has_pkg, "message": "PaddleOCR ready" if has_pkg else "paddleocr not installed"})
+
+    @app.post("/api/ocr/run")
+    async def ocr_run(body: dict):
+        """Run PaddleOCR on an uploaded image."""
+        import json as _json
+        from pathlib import Path as _P
+        from cv_agent.tools.ocr import run_ocr
+
+        image_path = body.get("image_path", "")
+        lang = body.get("lang", "en")
+
+        if not image_path:
+            return JSONResponse({"error": "image_path is required"}, status_code=400)
+        if not _P(image_path).exists():
+            return JSONResponse({"error": f"Image not found: {image_path}"}, status_code=404)
+
+        result_json = await asyncio.to_thread(
+            run_ocr.invoke,
+            {"image_path": image_path, "lang": lang, "render_overlay": True},
+        )
+        result = _json.loads(result_json)
+        if "overlay_path" in result and result["overlay_path"]:
+            result["overlay_url"] = "/" + result["overlay_path"].replace("\\", "/").lstrip("/")
         return JSONResponse(result)
 
     # ── Overview ───────────────────────────────────────────────────────────
