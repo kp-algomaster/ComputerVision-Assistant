@@ -806,7 +806,8 @@ function openPinnedSkill(skillId) {
     } else if (skillId === 'segment_anything') {
         switchView('sam3');
     } else {
-        switchView('skills');
+        const info = _skillsById[skillId] || {};
+        switchView(info.view || 'skills');
     }
     document.querySelectorAll('.pinned-skill-item').forEach(el => el.classList.remove('active'));
     const pinnedItem = document.getElementById(`pinned-skill-nav-${skillId}`);
