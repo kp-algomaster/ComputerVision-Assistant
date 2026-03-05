@@ -145,74 +145,84 @@ def _load_sam3_video() -> Any | None:
 
 # ── MLX model loader ─────────────────────────────────────────────────────────
 
+# mlx-community/sam3-image only ships weights. The Python source lives at:
+#   https://github.com/Deekshith-Dade/mlx_sam3
+# Clone it alongside the PyTorch sam3/:  git clone https://github.com/Deekshith-Dade/mlx_sam3.git
+_MLX_SAM3_SRC = Path("mlx_sam3")   # cloned repo root, relative to CWD
+
+
+def _mlx_sam3_src_available() -> bool:
+    """True when the mlx_sam3 GitHub source is cloned at mlx_sam3/."""
+    return (_MLX_SAM3_SRC / "sam3").is_dir()
+
+
 def _load_sam3_mlx_image() -> tuple[Any, Any] | None:
     """Load SAM3-MLX image model + processor. Returns (model, processor) or None.
 
-    The mlx-community/sam3-image repo ships its own sam3 package (mlx backend).
-    We temporarily prepend its source directory to sys.path so it shadows the
-    PyTorch sam3 editable install, then reload the relevant modules.
+    Requires:
+      1. mlx package installed (pip install mlx)
+      2. mlx_sam3 source cloned: git clone https://github.com/Deekshith-Dade/mlx_sam3.git
+      3. sam3-mlx weights downloaded from the Models page
+
+    The mlx_sam3 repo installs as the `sam3` package (same name as PyTorch SAM3).
+    We temporarily prepend mlx_sam3/ to sys.path so it shadows the editable
+    PyTorch install, run inference, then restore the PyTorch modules.
     """
     if "sam3_mlx_image" in _MODEL_CACHE:
         return _MODEL_CACHE["sam3_mlx_image"]
 
     model_dir = _BASE_MODELS / "sam3-mlx"
-    if not (model_dir.exists() and ((model_dir / ".complete").exists() or _find_checkpoint(model_dir))):
+    if not (model_dir.exists() and (model_dir / ".complete").exists()):
         return None
 
     try:
-        import mlx.core  # noqa: F401 — verify mlx is installed
+        import mlx.core  # noqa: F401
     except ImportError:
-        logger.error("SAM3-MLX requires the mlx package: pip install mlx")
+        logger.error("SAM3-MLX: mlx not installed — run: pip install mlx")
+        return None
+
+    if not _mlx_sam3_src_available():
+        logger.error(
+            "SAM3-MLX: source not found — run: "
+            "git clone https://github.com/Deekshith-Dade/mlx_sam3.git"
+        )
         return None
 
     import sys
 
-    # The downloaded repo ships sam3/ Python sources at its root.
-    mlx_src = str(model_dir)
-    already_first = sys.path and sys.path[0] == mlx_src
+    mlx_src = str(_MLX_SAM3_SRC.resolve())
 
-    # Remove the editable PyTorch sam3 from sys.modules so the mlx version
-    # can be imported cleanly from the download directory.
-    _evict = [k for k in list(sys.modules) if k == "sam3" or k.startswith("sam3.")]
-    for k in _evict:
-        del sys.modules[k]
+    def _swap_in() -> None:
+        """Evict PyTorch sam3 and prepend mlx_sam3 to sys.path."""
+        for k in [k for k in list(sys.modules) if k == "sam3" or k.startswith("sam3.")]:
+            del sys.modules[k]
+        if mlx_src not in sys.path:
+            sys.path.insert(0, mlx_src)
 
-    if not already_first:
-        sys.path.insert(0, mlx_src)
+    def _swap_out() -> None:
+        """Remove mlx sam3 modules and mlx_src from sys.path."""
+        for k in [k for k in list(sys.modules) if k == "sam3" or k.startswith("sam3.")]:
+            del sys.modules[k]
+        if mlx_src in sys.path:
+            sys.path.remove(mlx_src)
 
+    ckpt = _find_checkpoint(model_dir)
+
+    _swap_in()
     try:
         from sam3.model_builder import build_sam3_image_model  # mlx version
         from sam3.model.sam3_image_processor import Sam3Processor
-    except ImportError as exc:
-        logger.error("SAM3-MLX import failed: %s", exc)
-        # Restore PyTorch sam3
-        if not already_first:
-            sys.path.remove(mlx_src)
-        return None
-    finally:
-        # Always remove the mlx path so subsequent imports use PyTorch sam3
-        if not already_first and mlx_src in sys.path:
-            sys.path.remove(mlx_src)
-        # Re-evict mlx sam3 modules so PyTorch sam3 reloads cleanly later
-        for k in [k for k in list(sys.modules) if k == "sam3" or k.startswith("sam3.")]:
-            del sys.modules[k]
 
-    ckpt = _find_checkpoint(model_dir)
-    bpe: Path | None = None
-    try:
-        import sam3.model_builder as _mb  # may be None after eviction — rebuild path
-        _pkg_bpe = Path(_mb.__file__).parent / "assets" / "bpe_simple_vocab_16e6.txt.gz"
-        if _pkg_bpe.exists():
-            bpe = _pkg_bpe
-    except Exception:
-        pass
-    if bpe is None:
-        bpe = _find_file(model_dir, "bpe_simple_vocab*.txt.gz", "bpe_*.gz")
+        # BPE vocab is bundled with the mlx_sam3 package
+        bpe: Path | None = None
+        try:
+            import sam3.model_builder as _mb
+            _pkg_bpe = Path(_mb.__file__).parent / "assets" / "bpe_simple_vocab_16e6.txt.gz"
+            if _pkg_bpe.exists():
+                bpe = _pkg_bpe
+        except Exception:
+            pass
 
-    # Re-insert mlx path only for building the model
-    if mlx_src not in sys.path:
-        sys.path.insert(0, mlx_src)
-    try:
         model = build_sam3_image_model(
             checkpoint_path=str(ckpt) if ckpt else None,
             bpe_path=str(bpe) if bpe else None,
@@ -226,10 +236,7 @@ def _load_sam3_mlx_image() -> tuple[Any, Any] | None:
         logger.error("SAM3-MLX model load failed: %s", exc)
         return None
     finally:
-        if mlx_src in sys.path:
-            sys.path.remove(mlx_src)
-        for k in [k for k in list(sys.modules) if k == "sam3" or k.startswith("sam3.")]:
-            del sys.modules[k]
+        _swap_out()
 
 
 # ── Model availability helpers ───────────────────────────────────────────────
@@ -250,11 +257,17 @@ def available_segment_models() -> list[dict]:
         })
     if is_model_downloaded("sam3-mlx"):
         has_mlx = _ilu.find_spec("mlx") is not None
+        has_src  = _mlx_sam3_src_available()
+        needs = []
+        if not has_mlx:
+            needs.append("mlx package (pip install mlx)")
+        if not has_src:
+            needs.append("mlx_sam3 source (git clone https://github.com/Deekshith-Dade/mlx_sam3.git)")
         models.append({
             "id": "sam3-mlx",
             "label": "SAM 3 MLX (Apple Silicon)",
-            "ready": has_mlx,
-            "needs": [] if has_mlx else ["mlx package (pip install mlx)"],
+            "ready": has_mlx and has_src,
+            "needs": needs,
         })
     return models
 

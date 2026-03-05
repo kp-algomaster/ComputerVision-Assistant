@@ -1872,7 +1872,8 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
                 "Segment Anything (SAM3)", "✂️", "vision",
                 "Segment any object in images or videos using SAM3 (848M params). "
                 "Supports natural-language text prompts, bounding-box prompts, and video object tracking. "
-                "Model is gated — request access at hf.co/facebook/sam3.",
+                "PyTorch model is gated — request access at hf.co/facebook/sam3. "
+                "MLX model (Apple Silicon, ~2× faster) available without gating.",
                 "ready" if (has_sam3_pkg and has_sam3_model)
                     else ("needs-model" if has_sam3_pkg else "needs-install"),
                 ["segment_with_text", "segment_with_box", "segment_video"],
@@ -1882,10 +1883,14 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
                           else ["sam3 package", "SAM3 model weights"])
                 ),
                 packages=[],
-                models=[] if has_sam3_model else [{"id": "sam3", "label": "SAM 3 (~6.9 GB, gated)"}],
-                commands=[] if has_sam3_pkg else [
+                models=([] if has_sam3_model else [{"id": "sam3", "label": "SAM 3 (~6.9 GB, gated)"}])
+                      + [{"id": "sam3-mlx", "label": "SAM 3 MLX (3.4 GB, Apple Silicon)"}],
+                commands=([] if has_sam3_pkg else [
                     "git clone https://github.com/facebookresearch/sam3",
                     f'"{_py}" -m pip install -e sam3/',
+                ]) + [
+                    "git clone https://github.com/Deekshith-Dade/mlx_sam3.git",
+                    f'"{_py}" -m pip install mlx',
                 ],
                 install=(
                     None if has_sam3_pkg
