@@ -16,7 +16,7 @@ Integrate the Eko orchestration engine (Node.js sidecar) to enable multi-step, a
 **Target Platform**: Local runtime (macOS/Linux/Windows)
 **Project Type**: Agentic Web Interface + Python Backend + Node.js Sidecar
 **Performance Goals**: Sub-5s workflow planning, sub-2s UI synchronization
-**Constraints**: Requires local Playwright Chromium installation. Local fallback via Ollama for zero-config ML endpoints.
+**Constraints**: Requires local Playwright Chromium installation. Uses local Ollama models via OpenAI-compatible API for Eko LLM planning and execution (default: `qwen3.5:latest`, configurable via `EKO_MODEL` env var).
 **Scale/Scope**: Local single-user agent system.
 
 ## Constitution Check
@@ -53,7 +53,7 @@ src/
 │       └── style.css               # [MODIFY] Styles for workflow steps and thumbnails
 eko_sidecar/                        # [NEW] Node.js project for Eko orchestration
 ├── package.json                    # Eko and Playwright dependencies
-├── index.js                        # Express server wrapping Eko execution
+├── index.js                        # Express server wrapping Eko execution (Ollama LLM config)
 └── browser_agent.js                # Playwright headless automation logic
 ```
 

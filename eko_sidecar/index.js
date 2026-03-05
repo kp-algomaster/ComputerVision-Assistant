@@ -158,55 +158,94 @@ app.post('/workflow/run', async (req, res) => {
             console.error("Failed to add browser tools:", e.message);
         }
 
-        // Run the workflow asynchronously (Eko integration placeholder)
-        // TODO: Once @eko-ai/eko API is confirmed, wire up eko.generate() + eko.execute()
+        // Configure Eko with Ollama (OpenAI-compatible provider)
+        const OLLAMA_MODEL = process.env.EKO_MODEL || 'qwen3.5:latest';
+        const OLLAMA_BASE = process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1';
+
         (async () => {
             try {
                 runEmitter.emit('update', { status: 'running', action: 'Workflow Started', detail: description });
 
-                // For now, simulate workflow execution with tool calls
-                // This placeholder allows the full pipeline (UI → Python → Sidecar → SSE) to work
-                runEmitter.emit('update', { action: 'Processing', detail: `Executing workflow: ${description}` });
+                const { Eko } = await import('@eko-ai/eko');
 
-                // Try to use Eko if available
-                try {
-                    const ekoModule = await import('@eko-ai/eko');
-                    const Eko = ekoModule.Eko || ekoModule.default;
-                    if (Eko) {
-                        const eko = new Eko({ tools: ekoTools });
-                        const workflow = await eko.generate(description);
-                        runEmitter.emit('update', { action: 'Plan Generated', detail: `Steps: ${workflow.steps?.length || 'N/A'}` });
-                        const result = await eko.execute(workflow, {
-                            onStepProgress: (stepIdx, stepData) => {
-                                runEmitter.emit('update', { action: `Step ${stepIdx + 1}`, detail: stepData });
+                const ekoConfig = {
+                    llms: {
+                        default: {
+                            provider: 'openai-compatible',
+                            model: OLLAMA_MODEL,
+                            apiKey: 'ollama',           // Ollama doesn't need a real key
+                            config: {
+                                baseURL: OLLAMA_BASE,
+                                temperature: 0.7,
+                                maxOutputTokens: 4096,
                             },
-                            onCheckpoint: async (checkpoint) => {
-                                return new Promise((resolve) => {
-                                    const cpId = `cp_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-                                    pendingCheckpoints.set(cpId, resolve);
+                        },
+                    },
+                    agents: ekoTools,
+                    callback: {
+                        onMessage: async (message) => {
+                            if (message.type === 'workflow') {
+                                runEmitter.emit('update', {
+                                    action: 'Workflow Plan',
+                                    detail: message.streamDone ? 'Planning complete' : 'Planning...',
+                                    workflow: message.workflow,
+                                });
+                            } else if (message.type === 'agent_start') {
+                                runEmitter.emit('update', {
+                                    action: `Agent: ${message.agentName}`,
+                                    detail: `Starting: ${message.agentNode?.task || ''}`,
+                                });
+                            } else if (message.type === 'agent_result') {
+                                runEmitter.emit('update', {
+                                    action: `Agent Done: ${message.agentName}`,
+                                    detail: message.result ? message.result.substring(0, 200) : 'Completed',
+                                });
+                            } else if (message.type === 'tool_use') {
+                                runEmitter.emit('update', {
+                                    type: 'tool_start',
+                                    action: `Tool: ${message.toolName}`,
+                                    tool: message.toolName,
+                                    tool_input: message.params,
+                                });
+                            } else if (message.type === 'tool_result') {
+                                runEmitter.emit('update', {
+                                    type: 'tool_end',
+                                    action: `Tool Done: ${message.toolName}`,
+                                    detail: typeof message.toolResult === 'string'
+                                        ? message.toolResult.substring(0, 200)
+                                        : JSON.stringify(message.toolResult).substring(0, 200),
+                                });
+                            } else if (message.type === 'text') {
+                                if (message.streamDone) {
                                     runEmitter.emit('update', {
-                                        type: 'checkpoint',
-                                        checkpointId: cpId,
-                                        message: checkpoint.message || 'Workflow paused for approval',
-                                        data: checkpoint.data
+                                        action: 'LLM Response',
+                                        detail: message.text.substring(0, 300),
                                     });
+                                }
+                            } else if (message.type === 'error') {
+                                runEmitter.emit('update', {
+                                    action: 'Error',
+                                    detail: String(message.error),
                                 });
                             }
-                        });
-                        runEmitter.emit('update', { status: 'completed', result });
-                    } else {
-                        throw new Error('Eko constructor not found');
-                    }
-                } catch (ekoErr) {
-                    console.warn('Eko execution not available, running in pass-through mode:', ekoErr.message);
-                    runEmitter.emit('update', { action: 'Info', detail: 'Eko orchestration engine connected. Workflow submitted.' });
-                    runEmitter.emit('update', { status: 'completed', result: 'Workflow accepted. Eko engine is available for orchestration.' });
+                        },
+                    },
+                };
+
+                runEmitter.emit('update', { action: 'Initializing', detail: `Using Ollama model: ${OLLAMA_MODEL}` });
+
+                const eko = new Eko(ekoConfig);
+                const result = await eko.run(description);
+
+                if (result.success) {
+                    runEmitter.emit('update', { status: 'completed', result: result.result });
+                } else {
+                    runEmitter.emit('update', { error: result.result || result.stopReason, status: 'failed' });
                 }
+
             } catch (err) {
                 console.error(`Error in run ${runId}:`, err);
                 runEmitter.emit('update', { error: err.message, status: 'failed' });
-            } finally {
-                // Run is kept alive by createRun's 60s timeout
             }
         })();
 

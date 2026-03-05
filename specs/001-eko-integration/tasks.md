@@ -95,6 +95,9 @@
 - [X] T023 Code cleanup, error handling, and timeout enforcement across Python and Node.js
 - [X] T024 Write unit tests for `cv_agent/core/workflow_manager.py`
 - [X] T025 Documentation updates for the new Eko integration and BrowserAgent
+- [X] T026 Configure Eko SDK with Ollama LLM provider (`openai-compatible`, `qwen3.5:latest`)
+- [X] T027 Add `Agentic Workflows` skill to `/api/skills` with dynamic sidecar health check
+- [X] T028 Fix SSE event buffering race condition in sidecar stream handler
 
 ---
 
