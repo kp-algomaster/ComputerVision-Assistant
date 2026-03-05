@@ -44,6 +44,7 @@ MODEL_CATALOG: dict[str, list[ModelEntry]] = {
     ],
     "Segmentation": [
         ModelEntry(id="sam3",          name="SAM 3",          hf_repo="facebook/sam3",                   size_gb=6.9, desc="Segment Anything v3 — image+video, text prompts, 848M params (gated: request access at hf.co/facebook/sam3)"),
+        ModelEntry(id="sam3-mlx",      name="SAM 3 MLX",      hf_repo="mlx-community/sam3-image",        size_gb=3.4, desc="SAM 3 converted to Apple MLX — ~2× faster on Apple Silicon (M1/M2/M3/M4), no CUDA required"),
         ModelEntry(id="sam2.1-large",  name="SAM 2.1 Large",  hf_repo="facebook/sam2.1-hiera-large",     size_gb=2.5, desc="Segment Anything v2.1 — improved occlusion handling"),
         ModelEntry(id="sam2.1-small",  name="SAM 2.1 Small",  hf_repo="facebook/sam2.1-hiera-small",     size_gb=0.2, desc="Segment Anything v2.1 — lightweight"),
         ModelEntry(id="sam2-large",    name="SAM 2 Large",    hf_repo="facebook/sam2-hiera-large",       size_gb=2.5, desc="Segment Anything v2 — best accuracy"),

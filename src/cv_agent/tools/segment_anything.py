@@ -1,8 +1,8 @@
-"""Segment Anything tools using SAM3 (facebook/sam3) for image and video segmentation.
+"""Segment Anything tools using SAM3 (facebook/sam3) or SAM3-MLX (mlx-community/sam3-image).
 
 SAM3 supports text prompts, bounding box prompts, and video object tracking.
 Install: git clone https://github.com/facebookresearch/sam3 && pip install -e sam3/
-Weights:  download 'sam3' from the Models page (gated — requires HF access request).
+Weights:  download 'sam3' or 'sam3-mlx' from the Models page.
 """
 
 from __future__ import annotations
@@ -68,11 +68,9 @@ def _load_sam3_image() -> tuple[Any, Any] | None:
 
     try:
         import torch
-        device = (
-            "mps" if torch.backends.mps.is_available()
-            else "cuda" if torch.cuda.is_available()
-            else "cpu"
-        )
+        # SAM3 has unresolved MPS kernel bugs ("Placeholder tensor is empty").
+        # Use CUDA if available, otherwise CPU. MPS is skipped intentionally.
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     except ImportError:
         device = "cpu"
 
@@ -123,11 +121,7 @@ def _load_sam3_video() -> Any | None:
 
     try:
         import torch
-        device = (
-            "mps" if torch.backends.mps.is_available()
-            else "cuda" if torch.cuda.is_available()
-            else "cpu"
-        )
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     except ImportError:
         device = "cpu"
 
@@ -149,6 +143,122 @@ def _load_sam3_video() -> Any | None:
         return None
 
 
+# ── MLX model loader ─────────────────────────────────────────────────────────
+
+def _load_sam3_mlx_image() -> tuple[Any, Any] | None:
+    """Load SAM3-MLX image model + processor. Returns (model, processor) or None.
+
+    The mlx-community/sam3-image repo ships its own sam3 package (mlx backend).
+    We temporarily prepend its source directory to sys.path so it shadows the
+    PyTorch sam3 editable install, then reload the relevant modules.
+    """
+    if "sam3_mlx_image" in _MODEL_CACHE:
+        return _MODEL_CACHE["sam3_mlx_image"]
+
+    model_dir = _BASE_MODELS / "sam3-mlx"
+    if not (model_dir.exists() and ((model_dir / ".complete").exists() or _find_checkpoint(model_dir))):
+        return None
+
+    try:
+        import mlx.core  # noqa: F401 — verify mlx is installed
+    except ImportError:
+        logger.error("SAM3-MLX requires the mlx package: pip install mlx")
+        return None
+
+    import sys
+
+    # The downloaded repo ships sam3/ Python sources at its root.
+    mlx_src = str(model_dir)
+    already_first = sys.path and sys.path[0] == mlx_src
+
+    # Remove the editable PyTorch sam3 from sys.modules so the mlx version
+    # can be imported cleanly from the download directory.
+    _evict = [k for k in list(sys.modules) if k == "sam3" or k.startswith("sam3.")]
+    for k in _evict:
+        del sys.modules[k]
+
+    if not already_first:
+        sys.path.insert(0, mlx_src)
+
+    try:
+        from sam3.model_builder import build_sam3_image_model  # mlx version
+        from sam3.model.sam3_image_processor import Sam3Processor
+    except ImportError as exc:
+        logger.error("SAM3-MLX import failed: %s", exc)
+        # Restore PyTorch sam3
+        if not already_first:
+            sys.path.remove(mlx_src)
+        return None
+    finally:
+        # Always remove the mlx path so subsequent imports use PyTorch sam3
+        if not already_first and mlx_src in sys.path:
+            sys.path.remove(mlx_src)
+        # Re-evict mlx sam3 modules so PyTorch sam3 reloads cleanly later
+        for k in [k for k in list(sys.modules) if k == "sam3" or k.startswith("sam3.")]:
+            del sys.modules[k]
+
+    ckpt = _find_checkpoint(model_dir)
+    bpe: Path | None = None
+    try:
+        import sam3.model_builder as _mb  # may be None after eviction — rebuild path
+        _pkg_bpe = Path(_mb.__file__).parent / "assets" / "bpe_simple_vocab_16e6.txt.gz"
+        if _pkg_bpe.exists():
+            bpe = _pkg_bpe
+    except Exception:
+        pass
+    if bpe is None:
+        bpe = _find_file(model_dir, "bpe_simple_vocab*.txt.gz", "bpe_*.gz")
+
+    # Re-insert mlx path only for building the model
+    if mlx_src not in sys.path:
+        sys.path.insert(0, mlx_src)
+    try:
+        model = build_sam3_image_model(
+            checkpoint_path=str(ckpt) if ckpt else None,
+            bpe_path=str(bpe) if bpe else None,
+            load_from_HF=(ckpt is None),
+        )
+        processor = Sam3Processor(model)
+        _MODEL_CACHE["sam3_mlx_image"] = (model, processor)
+        logger.info("SAM3-MLX image model loaded from %s", ckpt or "HF")
+        return (model, processor)
+    except Exception as exc:
+        logger.error("SAM3-MLX model load failed: %s", exc)
+        return None
+    finally:
+        if mlx_src in sys.path:
+            sys.path.remove(mlx_src)
+        for k in [k for k in list(sys.modules) if k == "sam3" or k.startswith("sam3.")]:
+            del sys.modules[k]
+
+
+# ── Model availability helpers ───────────────────────────────────────────────
+
+def available_segment_models() -> list[dict]:
+    """Return list of available segmentation models with their status."""
+    from cv_agent.local_model_manager import is_model_downloaded
+    import importlib.util as _ilu
+
+    models = []
+    has_sam3_pkg = _ilu.find_spec("sam3") is not None
+    if is_model_downloaded("sam3"):
+        models.append({
+            "id": "sam3",
+            "label": "SAM 3 (PyTorch · CPU)",
+            "ready": has_sam3_pkg,
+            "needs": [] if has_sam3_pkg else ["sam3 package (pip install -e sam3/)"],
+        })
+    if is_model_downloaded("sam3-mlx"):
+        has_mlx = _ilu.find_spec("mlx") is not None
+        models.append({
+            "id": "sam3-mlx",
+            "label": "SAM 3 MLX (Apple Silicon)",
+            "ready": has_mlx,
+            "needs": [] if has_mlx else ["mlx package (pip install mlx)"],
+        })
+    return models
+
+
 # ── Mask visualisation ──────────────────────────────────────────────────────
 
 _MASK_COLORS = [
@@ -156,6 +266,16 @@ _MASK_COLORS = [
     (255, 220, 0), (220, 50, 220), (0, 220, 220),
     (255, 140, 0), (140, 0, 255),
 ]
+
+
+def _to_numpy(mask) -> "np.ndarray":
+    """Convert a mask (torch tensor, mlx array, or ndarray) to numpy."""
+    import numpy as np
+    if hasattr(mask, "cpu"):          # torch tensor
+        return mask.cpu().numpy()
+    if hasattr(mask, "__array__"):    # mlx array (supports numpy protocol)
+        return np.asarray(mask)
+    return np.asarray(mask)
 
 
 def _overlay_masks(image, masks, alpha: float = 0.45):
@@ -167,17 +287,14 @@ def _overlay_masks(image, masks, alpha: float = 0.45):
     for i, mask in enumerate(masks):
         if mask is None:
             continue
-        m = mask if isinstance(mask, np.ndarray) else mask.cpu().numpy()
+        m = _to_numpy(mask)
         if m.ndim == 3:
             m = m[0]
         if not m.any():
             continue
         r, g, b = _MASK_COLORS[i % len(_MASK_COLORS)]
         color = np.array([r, g, b, int(255 * alpha)], dtype=np.float32)
-        arr[m.astype(bool)] = (
-            arr[m.astype(bool)] * (1 - alpha)
-            + color * alpha
-        )
+        arr[m.astype(bool)] = arr[m.astype(bool)] * (1 - alpha) + color * alpha
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 
 

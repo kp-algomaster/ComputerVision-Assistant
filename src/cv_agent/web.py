@@ -2107,6 +2107,7 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
         """Check whether the SAM3 package and model weights are available."""
         import importlib.util as _ilu
         from cv_agent.local_model_manager import is_model_downloaded
+        from cv_agent.tools.segment_anything import available_segment_models
         has_pkg   = _ilu.find_spec("sam3") is not None
         has_model = is_model_downloaded("sam3")
         ready     = has_pkg and has_model
@@ -2115,41 +2116,95 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
             else ("SAM3 package installed — download model weights from the Models page" if has_pkg
                   else "Install sam3 package and download model weights to use this skill")
         )
-        return JSONResponse({"ready": ready, "has_pkg": has_pkg, "has_model": has_model, "message": message})
+        models = available_segment_models()
+        return JSONResponse({
+            "ready": ready,
+            "has_pkg": has_pkg,
+            "has_model": has_model,
+            "message": message,
+            "available_models": models,
+        })
 
     @app.post("/api/sam3/segment")
     async def sam3_segment_endpoint(body: dict):
         """Run SAM3 segmentation on an uploaded image. Supports text and box prompt modes."""
         import json as _json
         from pathlib import Path as _P
-        from cv_agent.tools.segment_anything import segment_with_text, segment_with_box
+        from cv_agent.tools.segment_anything import (
+            segment_with_text, segment_with_box,
+            _load_sam3_image, _load_sam3_mlx_image,
+            _overlay_masks, _save_overlay, _extract_masks_scores_boxes,
+        )
 
-        image_path = body.get("image_path", "")
-        mode       = body.get("mode", "text")
+        image_path  = body.get("image_path", "")
+        mode        = body.get("mode", "text")
+        model_id    = body.get("model", "sam3")
 
         if not image_path:
             return JSONResponse({"error": "image_path is required"}, status_code=400)
         if not _P(image_path).exists():
             return JSONResponse({"error": f"Image file not found: {image_path}"}, status_code=404)
 
-        if mode == "text":
-            prompt = body.get("prompt", "").strip()
-            if not prompt:
-                return JSONResponse({"error": "prompt is required for text mode"}, status_code=400)
-            result_json = await asyncio.to_thread(
-                segment_with_text.invoke,
-                {"image_path": image_path, "prompt": prompt, "output_path": ""},
-            )
-        elif mode == "box":
-            box = body.get("box")
-            if not box:
-                return JSONResponse({"error": "box is required for box mode"}, status_code=400)
-            result_json = await asyncio.to_thread(
-                segment_with_box.invoke,
-                {"image_path": image_path, "box_json": _json.dumps(box), "output_path": ""},
-            )
+        # Dispatch to correct loader based on model_id
+        if model_id == "sam3-mlx":
+            def _run_mlx_sync() -> str:
+                from PIL import Image as _Img
+                loaded = _load_sam3_mlx_image()
+                if loaded is None:
+                    return _json.dumps({"error": "SAM3-MLX not available. Download the 'sam3-mlx' model and install mlx (pip install mlx)."})
+                _model, processor = loaded
+                try:
+                    image = _Img.open(image_path).convert("RGB")
+                    state = processor.set_image(image)
+                    if mode == "text":
+                        prompt = body.get("prompt", "").strip()
+                        if not prompt:
+                            return _json.dumps({"error": "prompt is required for text mode"})
+                        output = processor.set_text_prompt(prompt=prompt, state=state)
+                    elif mode == "box":
+                        box_raw = body.get("box")
+                        if not box_raw:
+                            return _json.dumps({"error": "box is required for box mode"})
+                        b = box_raw if isinstance(box_raw, dict) else _json.loads(box_raw)
+                        output = processor.add_geometric_prompt(
+                            box=[b["x1"], b["y1"], b["x2"], b["y2"]], label=True, state=state
+                        )
+                    else:
+                        return _json.dumps({"error": f"Unknown mode: {mode}"})
+                    masks, scores, boxes_out = _extract_masks_scores_boxes(output)
+                    overlay = _overlay_masks(image, masks)
+                    out_file = _save_overlay(image_path, overlay)
+                    return _json.dumps({
+                        "output_path": out_file,
+                        "mask_count": len(masks),
+                        "scores": [round(s, 4) for s in scores],
+                        "boxes": [b.tolist() if hasattr(b, "tolist") else b for b in boxes_out],
+                        "model": "SAM3-MLX",
+                    })
+                except Exception as exc:
+                    return _json.dumps({"error": f"SAM3-MLX inference failed: {exc}"})
+
+            result_json = await asyncio.to_thread(_run_mlx_sync)
         else:
-            return JSONResponse({"error": f"Unknown mode: {mode}"}, status_code=400)
+            # Default: PyTorch SAM3
+            if mode == "text":
+                prompt = body.get("prompt", "").strip()
+                if not prompt:
+                    return JSONResponse({"error": "prompt is required for text mode"}, status_code=400)
+                result_json = await asyncio.to_thread(
+                    segment_with_text.invoke,
+                    {"image_path": image_path, "prompt": prompt, "output_path": ""},
+                )
+            elif mode == "box":
+                box = body.get("box")
+                if not box:
+                    return JSONResponse({"error": "box is required for box mode"}, status_code=400)
+                result_json = await asyncio.to_thread(
+                    segment_with_box.invoke,
+                    {"image_path": image_path, "box_json": _json.dumps(box), "output_path": ""},
+                )
+            else:
+                return JSONResponse({"error": f"Unknown mode: {mode}"}, status_code=400)
 
         result = _json.loads(result_json)
 

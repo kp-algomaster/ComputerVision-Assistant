@@ -4258,6 +4258,29 @@ body {
     line-height: 1.4;
 }
 
+/* Model selector row */
+.sam3-model-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sam3-select {
+    flex: 1;
+    padding: 7px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.sam3-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
 /* Mode tabs */
 .sam3-tabs {
     display: flex;

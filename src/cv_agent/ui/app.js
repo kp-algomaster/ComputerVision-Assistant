@@ -3694,6 +3694,24 @@ function loadSam3View() {
             badge.style.borderColor = '#5a4000';
             badge.style.color = '#c8a040';
         }
+
+        // Populate model selector from available_models list
+        const sel = document.getElementById('sam3ModelSelect');
+        const row = document.getElementById('sam3ModelRow');
+        if (sel && row) {
+            const models = d.available_models || [];
+            if (models.length > 0) {
+                sel.innerHTML = '';
+                for (const m of models) {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.label + (m.ready ? '' : ' ⚠️');
+                    opt.disabled = !m.ready;
+                    sel.appendChild(opt);
+                }
+                row.hidden = models.length < 2; // only show selector when there's a choice
+            }
+        }
     }).catch(() => {});
 }
 
@@ -3898,10 +3916,12 @@ async function _sam3RunSegment(extra) {
     _sam3ClearError();
 
     try {
+        const sel = document.getElementById('sam3ModelSelect');
+        const model = sel && !sel.hidden && sel.value ? sel.value : 'sam3';
         const resp = await fetch('/api/sam3/segment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image_path: _sam3.imagePath, ...extra }),
+            body: JSON.stringify({ image_path: _sam3.imagePath, model, ...extra }),
         });
         const data = await resp.json();
         if (data.error) throw new Error(data.error);
