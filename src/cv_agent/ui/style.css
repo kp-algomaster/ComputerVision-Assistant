@@ -4144,6 +4144,7 @@ body {
     background: #0d0d0d;
     overflow: hidden;
     min-height: 0;
+    height: 100%; /* explicit height so flex children can resolve flex:1 */
 }
 
 .sam3-upload-zone {

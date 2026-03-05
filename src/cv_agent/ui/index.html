@@ -473,7 +473,7 @@
                             <input type="file" id="sam3FileInput" accept="image/*" hidden>
                             <div class="sam3-upload-content" id="sam3UploadContent">
                                 <div class="sam3-upload-icon">🖼️</div>
-                                <p>Drop image here or <button class="btn-link" onclick="document.getElementById('sam3FileInput').click()">browse</button></p>
+                                <p>Drop image here or <button class="btn-link" onclick="event.stopPropagation(); document.getElementById('sam3FileInput').click()">browse</button></p>
                                 <p class="sam3-upload-hint">JPEG · PNG · WebP</p>
                             </div>
                         </div>

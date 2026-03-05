@@ -3741,14 +3741,17 @@ async function _sam3HandleFile(file) {
         const img  = document.getElementById('sam3Img');
         const wrap = document.getElementById('sam3ImgWrap');
 
-        img.onload = () => _sam3SyncCanvas();
-        img.src = data.url + '?t=' + Date.now();
-
+        // Show wrap BEFORE setting src — so dimensions are available when onload fires
         document.getElementById('sam3UploadZone').hidden = true;
         wrap.hidden = false;
         document.getElementById('sam3ImgToolbar').hidden = false;
         document.getElementById('sam3ImgInfo').textContent =
             data.width && data.height ? `${data.width} × ${data.height} px` : '';
+
+        img.onload = () => _sam3SyncCanvas();
+        img.src = data.url + '?t=' + Date.now();
+        // Fallback: if the image was already decoded before onload wired up
+        requestAnimationFrame(() => { if (img.complete && img.naturalWidth > 0) _sam3SyncCanvas(); });
 
         sam3ClearResult();
     } catch (e) {

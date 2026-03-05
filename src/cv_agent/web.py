@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import markdown
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -2068,7 +2068,7 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
     # ── SAM3 Playground ────────────────────────────────────────────────────
 
     @app.post("/api/sam3/upload")
-    async def sam3_upload_image(file):
+    async def sam3_upload_image(file: UploadFile = File(...)):
         """Accept an image upload, save to output/segments/uploads/, return path + dimensions."""
         import uuid
         from pathlib import Path as _P
