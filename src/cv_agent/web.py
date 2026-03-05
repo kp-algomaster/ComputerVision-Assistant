@@ -1783,6 +1783,8 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
         has_monkey_ocr = is_model_downloaded("monkey-ocr")
         has_paddle_ocr = _pkg("paddleocr")
         has_any_ocr    = has_monkey_ocr or has_paddle_ocr
+        has_sam3_pkg   = _pkg("sam3")
+        has_sam3_model = is_model_downloaded("sam3")
 
         def _skill(label, icon, category, description, status, tools,
                    missing=None, packages=None, models=None, powers=None,
@@ -1861,6 +1863,26 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
                 missing=[] if _pkg("supervision") else ["supervision"],
                 packages=[] if _pkg("supervision") else ["supervision"],
                 install=None if _pkg("supervision") else "pip install supervision",
+            ),
+            "segment_anything": _skill(
+                "Segment Anything (SAM3)", "✂️", "vision",
+                "Segment any object in images or videos using SAM3 (848M params). "
+                "Supports natural-language text prompts, bounding-box prompts, and video object tracking. "
+                "Model is gated — request access at hf.co/facebook/sam3.",
+                "ready" if (has_sam3_pkg and has_sam3_model)
+                    else ("needs-model" if has_sam3_pkg else "needs-install"),
+                ["segment_with_text", "segment_with_box", "segment_video"],
+                missing=(
+                    [] if (has_sam3_pkg and has_sam3_model)
+                    else (["SAM3 model weights (~6.9 GB, gated)"] if has_sam3_pkg
+                          else ["sam3 package", "SAM3 model weights"])
+                ),
+                packages=[] if has_sam3_pkg else [],
+                models=[] if has_sam3_model else [{"id": "sam3", "label": "SAM 3 (~6.9 GB, gated)"}],
+                install=(
+                    None if has_sam3_pkg
+                    else "git clone https://github.com/facebookresearch/sam3 && pip install -e sam3/"
+                ),
             ),
             "text_to_image": _skill(
                 "Text → Image", "🖼️", "vision",
