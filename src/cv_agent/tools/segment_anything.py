@@ -294,10 +294,17 @@ def _to_numpy(mask) -> "np.ndarray":
     return np.asarray(mask)
 
 
-def _overlay_masks(image, masks, alpha: float = 0.45):
-    """Return a PIL RGBA image with coloured mask overlays."""
+def _overlay_masks(
+    image,
+    masks,
+    alpha: float = 0.45,
+    scores: list[float] | None = None,
+    boxes: list | None = None,
+    label: str = "",
+):
+    """Return a PIL RGBA image with coloured mask overlays, bounding boxes, and labels."""
     import numpy as np
-    from PIL import Image
+    from PIL import Image, ImageDraw, ImageFont
 
     arr = np.array(image.convert("RGBA"), dtype=np.float32)
     for i, mask in enumerate(masks):
@@ -311,7 +318,57 @@ def _overlay_masks(image, masks, alpha: float = 0.45):
         r, g, b = _MASK_COLORS[i % len(_MASK_COLORS)]
         color = np.array([r, g, b, int(255 * alpha)], dtype=np.float32)
         arr[m.astype(bool)] = arr[m.astype(bool)] * (1 - alpha) + color * alpha
-    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+
+    result = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+
+    n_boxes = len(boxes) if boxes else 0
+    n_scores = len(scores) if scores else 0
+    if n_boxes > 0 or n_scores > 0:
+        draw = ImageDraw.Draw(result)
+        font_size = max(14, image.height // 35)
+        font = None
+        for _fp in (
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        ):
+            try:
+                font = ImageFont.truetype(_fp, size=font_size)
+                break
+            except Exception:
+                continue
+        if font is None:
+            try:
+                font = ImageFont.load_default(size=font_size)
+            except TypeError:
+                font = ImageFont.load_default()
+
+        n = max(len(masks), n_boxes)
+        for i in range(n):
+            clr = _MASK_COLORS[i % len(_MASK_COLORS)]
+            box = boxes[i] if boxes and i < n_boxes else None
+            score = scores[i] if scores and i < n_scores else None
+
+            if box is not None:
+                x1, y1, x2, y2 = [float(v) for v in box]
+                draw.rectangle([x1, y1, x2, y2], outline=clr + (255,), width=3)
+
+                text_parts = []
+                if label:
+                    text_parts.append(label)
+                if score is not None:
+                    text_parts.append(f"{score:.2f}")
+                text = " ".join(text_parts)
+                if text:
+                    tx, ty = x1 + 4, y1 + 4
+                    tb = draw.textbbox((tx, ty), text, font=font)
+                    pad = 3
+                    draw.rectangle(
+                        [tb[0] - pad, tb[1] - pad, tb[2] + pad, tb[3] + pad],
+                        fill=clr + (210,),
+                    )
+                    draw.text((tx, ty), text, fill=(255, 255, 255, 255), font=font)
+
+    return result
 
 
 def _save_overlay(image_path: str, overlay_image) -> str:
@@ -413,7 +470,7 @@ def segment_with_text(
         return json.dumps({"error": f"SAM3 inference failed: {exc}"})
 
     masks, scores, boxes = _extract_masks_scores_boxes(output)
-    overlay = _overlay_masks(image, masks)
+    overlay = _overlay_masks(image, masks, scores=scores, boxes=boxes, label=prompt)
     out_file = output_path if output_path else _save_overlay(image_path, overlay)
     if output_path:
         overlay.save(output_path)
@@ -470,8 +527,9 @@ def segment_with_box(
     except Exception as exc:
         return json.dumps({"error": f"SAM3 inference failed: {exc}"})
 
-    masks, scores, _ = _extract_masks_scores_boxes(output)
-    overlay = _overlay_masks(image, masks)
+    masks, scores, boxes_out = _extract_masks_scores_boxes(output)
+    draw_boxes = boxes_out if boxes_out else [box]
+    overlay = _overlay_masks(image, masks, scores=scores, boxes=draw_boxes)
     out_file = output_path if output_path else _save_overlay(image_path, overlay)
     if output_path:
         overlay.save(output_path)

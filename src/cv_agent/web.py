@@ -2177,7 +2177,8 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
                     else:
                         return _json.dumps({"error": f"Unknown mode: {mode}"})
                     masks, scores, boxes_out = _extract_masks_scores_boxes(output)
-                    overlay = _overlay_masks(image, masks)
+                    _lbl = prompt if mode == "text" else ""
+                    overlay = _overlay_masks(image, masks, scores=scores, boxes=boxes_out, label=_lbl)
                     out_file = _save_overlay(image_path, overlay)
                     return _json.dumps({
                         "output_path": out_file,
