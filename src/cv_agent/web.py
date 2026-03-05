@@ -1791,7 +1791,8 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
 
         def _skill(label, icon, category, description, status, tools,
                    missing=None, packages=None, models=None, powers=None,
-                   model=None, model_label=None, install=None, commands=None):
+                   model=None, model_label=None, install=None, commands=None,
+                   view=None):
             return {
                 "label": label, "icon": icon, "category": category,
                 "description": description, "status": status, "tools": tools,
@@ -1802,6 +1803,7 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
                 "commands": commands or [],    # list of shell commands to run in order
                 "model": model, "model_label": model_label,
                 "install": install,
+                "view": view,
             }
 
         skills = {
