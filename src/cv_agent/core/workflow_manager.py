@@ -40,22 +40,25 @@ class WorkflowManager:
         # Note: We will proxy this SSE stream to the frontend in cv_agent/web.py
         # Current sidecar doesn't implement SSE yet (T008a implementation phase)
         try:
-            async with httpx.AsyncClient() as client:
+            # Use no read timeout — planning with a thinking model can take 60–120 s
+            timeout = httpx.Timeout(connect=5.0, read=None, write=5.0, pool=5.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 async with client.stream("GET", f"{self.base_url}/workflow/{run_id}/stream") as resp:
                     resp.raise_for_status()
+                    import json
                     async for line in resp.aiter_lines():
                         if not line.strip():
                             continue
                         if line.startswith("data: "):
-                            import json
                             try:
                                 data = json.loads(line[6:])
                                 yield data
                             except json.JSONDecodeError:
                                 pass
         except Exception as e:
-            logger.error(f"Failed to stream workflow {run_id} from Eko sidecar: {e}")
-            yield {"error": str(e), "status": "failed"}
+            err_str = str(e) or repr(e)
+            logger.error(f"Failed to stream workflow {run_id} from Eko sidecar: {err_str}")
+            yield {"error": err_str or "Stream error", "status": "failed"}
 
     async def get_workflow_templates(self) -> list[dict[str, Any]]:
         """Retrieve all saved workflow templates."""

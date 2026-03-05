@@ -165,6 +165,14 @@ app.post('/workflow/run', async (req, res) => {
         const OLLAMA_BASE = process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1';
 
         (async () => {
+            // Keepalive ping every 15 s so the Python proxy and browser don't timeout
+            // during the silent LLM planning phase
+            const keepalive = setInterval(() => {
+                if (!run.done) {
+                    runEmitter.emit('update', { action: 'Planning', detail: 'Thinking...' });
+                }
+            }, 15000);
+
             try {
                 runEmitter.emit('update', { status: 'running', action: 'Workflow Started', detail: description });
 
@@ -267,7 +275,10 @@ app.post('/workflow/run', async (req, res) => {
 
             } catch (err) {
                 console.error(`Error in run ${runId}:`, err);
-                runEmitter.emit('update', { error: err.message, status: 'failed' });
+                const errMsg = (err instanceof Error) ? err.message : String(err);
+                runEmitter.emit('update', { error: errMsg || 'Unknown error', status: 'failed' });
+            } finally {
+                clearInterval(keepalive);
             }
         })();
 
