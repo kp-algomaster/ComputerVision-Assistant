@@ -1,6 +1,6 @@
 # Computer Vision Assistant 👁️
 
-An autonomous Computer Vision research assistant — monitors arXiv, processes papers, builds knowledge graphs, generates specs, and runs vision tasks locally via Ollama and MLX. Powered by [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw).
+An autonomous Computer Vision research assistant — monitors arXiv, processes papers, builds knowledge graphs, generates specs, runs vision tasks locally via Ollama and MLX, manages local model weights, downloads training datasets, and fine-tunes models with HuggingFace Trainer. Powered by [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw).
 
 ---
 
@@ -27,6 +27,7 @@ graph TD
     subgraph Backends["⚡ Backends"]
         OL["Ollama\nlocalhost:11434"]
         MLX["MLX\nApple Silicon"]
+        HF["HuggingFace Hub\nsnapshot_download"]
         AX["ArXiv API"]
         SS["Semantic Scholar"]
         FS["Local Filesystem\n& Obsidian Vault"]
@@ -39,7 +40,7 @@ graph TD
     T2 --> OL & MLX
     T3 & T4 --> FS
     T5 --> FS
-    T6 --> OL
+    T6 --> OL & HF
 ```
 
 ---
@@ -71,7 +72,7 @@ flowchart LR
     HW["🖥️ Hardware Probe\nllmfit system"]
     INFO["M4 Max\n36 GB RAM · 36 GB VRAM\n14 cores · Metal"]
     RANK["📊 llmfit rank\nmodels by fit score"]
-    SEL["✅ Selected Model\nminimax-m2.5:cloud"]
+    SEL["✅ Selected Model\nqwen3.5:latest"]
     AG["🧠 Agent\ncreate_agent(model)"]
 
     HW --> INFO --> RANK --> SEL --> AG
@@ -81,28 +82,91 @@ flowchart LR
 
 ## Web UI
 
-Single-page app at `http://localhost:8420` using a sidebar layout inspired by OpenClaw.
+Single-page app at `http://localhost:8420` with a sidebar navigation containing 15+ views.
 
-![Web UI](docs/screenshots/Web-UI.png)
+---
+
+## Navigation Views
+
+| Section | View | Description |
+|---------|------|-------------|
+| **Core** | 💬 Chat | WebSocket chat with the main agent |
+| | 🤖 Agents | Specialized sub-agents (Blog Writer, Paper→Code, etc.) |
+| | 📋 Skills | Capability catalog with install/power status |
+| | 🗂️ Datasets | Download and search datasets from HuggingFace & Kaggle |
+| | 🔌 Powers | Configure API keys and external integrations |
+| | 🏥 Health | System health, latency, model status |
+| **Models** | 🤖 Models | Ollama model pull, HF model download, server management |
+| **Research** | 📚 Papers | ArXiv search and paper processing |
+| | 🕸️ Knowledge | Knowledge graph viewer |
+| | 📰 Digest | Weekly research digest |
+| **Tools** | 🖼️ Vision | Image analysis with any Ollama vision model |
+| | 🧭 Text→Diagram | Natural language → Mermaid/architecture diagrams |
+| | ⚙️ Jobs | Scheduled jobs and fine-tuning runs |
+| **System** | 💾 Cache | Prompt cache management |
+| | 🔧 Settings | Agent configuration |
 
 ---
 
 ## Concepts
 
 ### 🤖 Models
+
 Model weights that power intelligent inference. Three categories live in this project:
 
 | Type | Where | Examples |
 |------|-------|---------|
 | **Ollama models** | Pulled via `ollama pull` | qwen2.5vl, qwen3-vl, olmocr2 (VLMs / LLMs) |
-| **Local HF models** | Downloaded to `output/.models/` | SD-Turbo, SAM 2/3, Monkey OCR 1.5, SVD |
+| **Local HF models** | Downloaded to `output/.models/` | SD-Turbo, SDXL-Turbo, DeepGen 1.0, SAM 2/3, Monkey OCR 1.5, SVD/SVD-XT, PaddleOCR |
 | **pip-based models** | Auto-download on first use | PaddleOCR |
 
-Models are managed from the **Models** view — pull Ollama models, download HuggingFace weights, track disk usage, and monitor health of local inference servers.
+#### Local Model Catalog
+
+| Category | Model | HF Repo | Size |
+|----------|-------|---------|------|
+| Image Generation | SD-Turbo | `stabilityai/sd-turbo` | 4.8 GB |
+| Image Generation | SDXL-Turbo | `stabilityai/sdxl-turbo` | 6.5 GB |
+| Image Generation | DeepGen 1.0 | `deepgenteam/DeepGen-1.0` | 16.4 GB |
+| Video Generation | Stable Video Diffusion | `stabilityai/stable-video-diffusion-img2vid` | 9.2 GB |
+| Video Generation | SVD-XT (25 frames) | `stabilityai/stable-video-diffusion-img2vid-xt` | 9.2 GB |
+| OCR | Monkey OCR 1.5 | `echo840/MonkeyOCR` | 8.0 GB |
+| OCR | PaddleOCR | pip package | 0.5 GB |
+| Segmentation | SAM 3 | `facebook/sam3` | 6.9 GB |
+| Segmentation | SAM 2.1 Large | `facebook/sam2.1-hiera-large` | 2.5 GB |
+| Segmentation | SAM 2.1 Small | `facebook/sam2.1-hiera-small` | 0.2 GB |
+| Segmentation | SAM 2 Large | `facebook/sam2-hiera-large` | 2.5 GB |
+| Segmentation | SAM 2 Base+ | `facebook/sam2-hiera-base-plus` | 0.8 GB |
+
+Models are managed from the **Models** view — pull Ollama models, download HuggingFace weights, track disk usage, and monitor health of local inference servers. Downloads stream progress via SSE and resume automatically after interruption.
+
+---
+
+### 🗂️ Datasets
+
+A built-in dataset catalog lets you download training and evaluation datasets directly from HuggingFace with one click, or search for any dataset across HuggingFace and Kaggle.
+
+#### Pre-configured Dataset Catalog (11 datasets)
+
+| Category | Dataset | Source | Size |
+|----------|---------|--------|------|
+| Image Classification | Food-101 | `food101` | 5.6 GB |
+| Image Classification | Oxford-IIIT Pets | `pcuenq/oxford-pets` | 0.8 GB |
+| Image Classification | CIFAR-100 | `uoft-cs/cifar100` | 0.5 GB |
+| Image Classification | Flowers-102 | `nelorth/oxford-flowers` | 0.4 GB |
+| Image Classification | Beans | `AI-Lab-Makerere/beans` | 0.1 GB |
+| Object Detection | WIDER FACE | `CASIA-IVA-Lab/WIDER_FACE` | 3.5 GB |
+| Object Detection | Pascal VOC 2007 | `Graphcore/voc2007` | 0.9 GB |
+| Segmentation | Sidewalk Semantic | `segments/sidewalk-semantic` | 0.3 GB |
+| Segmentation | ADE20K (Scene Parse 150) | `zhoubolei/scene_parse_150` | 0.8 GB |
+| Document / OCR | DocVQA Sample | `nielsr/docvqa_1200_examples` | 0.2 GB |
+| Document / OCR | SROIE Receipt OCR | `darentang/sroie` | 0.1 GB |
+
+**Search**: type any query in the Datasets search bar and switch between HuggingFace or Kaggle sources. Results show download count, likes, tags, and size. HuggingFace results can be downloaded directly into `output/.datasets/` with live progress streaming. All datasets use a `.complete` sentinel file to track completion and support reliable resume.
 
 ---
 
 ### ⚡ Skills
+
 A **Skill** is a named, composable capability built from one or more of:
 
 - **Models** — AI/ML weights that provide intelligence (e.g. SAM 3 for segmentation, SD-Turbo for generation)
@@ -126,12 +190,12 @@ Skills show three states in the UI:
 | 🧊 | 3D Image Processing | Vision | open3d · trimesh (MIT/Apache) | 📦 `pip install open3d` |
 | 🎥 | Video Understanding | Vision | opencv-python · decord (Apache 2.0) | 📦 `pip install opencv-python` |
 | 🧩 | Image Stitching | Vision | OpenCV Stitcher (Apache 2.0) | 📦 `pip install opencv-python` |
-| 🎯 | Object Detection | Vision | torchvision (BSD-3) · transformers RT-DETR (Apache 2.0) | 📦 `pip install torchvision` |
+| 🎯 | Object Detection | Vision | torchvision (BSD-3) · transformers RT-DETR | 📦 `pip install torchvision` |
 | 📡 | Object Tracking | Vision | supervision + ByteTrack/SORT (MIT) | 📦 `pip install supervision` |
-| 🖼️ | Text → Image | Vision | diffusers (Apache 2.0) + SD-Turbo / SDXL-Turbo models | 📦 `pip install diffusers` |
+| 🖼️ | Text → Image | Vision | diffusers (Apache 2.0) + SD-Turbo / SDXL-Turbo | 📦 `pip install diffusers` |
 | 🔭 | Super Resolution | Vision | spandrel (MIT) — ESRGAN · SwinIR · HAT | 📦 `pip install spandrel` |
-| ✨ | Image Denoising | Vision | kornia (Apache 2.0) — Gaussian · bilateral · NLM | 📦 `pip install kornia` |
-| 📄 | Image Document Extraction | Vision | Monkey OCR 1.5 (default) · PaddleOCR fallback | ✅ Ready (Monkey OCR downloaded) |
+| ✨ | Image Denoising | Vision | kornia (Apache 2.0) | 📦 `pip install kornia` |
+| 📄 | Image Document Extraction | Vision | Monkey OCR 1.5 · PaddleOCR fallback | ✅ Ready |
 | ✍️ | Write Research Blog | Content | search_arxiv · web_search · file_write | ✅ Ready |
 | 📰 | Weekly Digest | Content | search_arxiv · web_search · file_write | ✅ Ready |
 | 📧 | Email Reports | Content | SMTP | ⚡ Needs Power (Email) |
@@ -140,37 +204,63 @@ Skills show three states in the UI:
 | ∑ | Equation Extraction | Research | LaTeX parser · PDF tools | ✅ Ready |
 | 🧭 | Text → Diagram | Research | paperbanana · Ollama · matplotlib | 📦 `pip install -e paperbanana/` |
 | 🏆 | Kaggle Competition | ML / Training | Kaggle API | ⚡ Needs Power (Kaggle) |
-| 🎯 | Model Fine-Tuning | ML / Training | HuggingFace Trainer · Azure ML | ⚡ Needs Power (HF / Azure) |
+| 🎯 | Model Fine-Tuning | ML / Training | HuggingFace Trainer (local) | ✅ Ready (with HF_TOKEN) |
 | 📊 | Dataset Analysis | ML / Training | shell · file_read · analyze_image | ✅ Ready |
-
-**6 / 20 skills ready** out of the box. Install packages or configure Powers to unlock the rest.
 
 ---
 
 ### 🔌 Powers
+
 A **Power** is an external resource, integration, or API key that extends what the agent can access. Powers are configured from the **Powers** view — no manual `.env` editing required.
+
+---
+
+### ⚙️ Jobs
+
+The **Jobs** view provides scheduled tasks and one-click runs:
+
+| Job | Type | Description |
+|-----|------|-------------|
+| 📰 Weekly Digest | Scheduled | Auto-generates a weekly CV research digest every Monday |
+| 🎯 Model Fine-Tuning | On-demand | Configure and launch a HuggingFace Trainer fine-tuning run locally |
+
+**Model Fine-Tuning job**: select any HF base model (default: `google/vit-base-patch16-224`), a downloaded dataset, image/label column names, epochs, learning rate, and batch size. The job generates a full training script, streams live output via SSE, and saves the fine-tuned model to `output/fine-tuned/<name>/`.
+
+---
+
+### 🖥️ Server Management
+
+The **Models** view includes a server management panel for local inference servers (non-Ollama):
+
+| Server | URL | Notes |
+|--------|-----|-------|
+| Ollama | `http://localhost:11434` | Managed externally — always shown |
+| Image Generation | `http://localhost:7860` | Start/stop; device: GPU / CPU / Auto |
+| OCR Service | `http://localhost:7861` | Start/stop; device: CPU |
+
+Each server shows a live Connected / Disconnected status badge and supports Restart, Stop, and device-selector controls.
 
 ---
 
 ## Agents
 
-Agents are standalone, focused AI workers — each with its own system prompt, curated tool set, and dedicated WebSocket endpoint (`/ws/agent/<id>`). They can also be invoked by the main agent via delegation tools.
+Agents are standalone, focused AI workers — each with its own system prompt, curated tool set, and dedicated WebSocket endpoint (`/ws/agent/<id>`).
 
 | Icon | Agent | Description | Status |
 |------|-------|-------------|--------|
-| ✍️ | **Blog Writer** | Writes research blog posts from papers, summaries, or topics. Fetches live paper data before writing. | ✅ Ready |
+| ✍️ | **Blog Writer** | Writes research blog posts from papers, summaries, or topics. | ✅ Ready |
 | 🌐 | **Website Maintenance** | Audits sites for broken links, uptime, and on-page SEO issues. | ✅ Ready |
-| 🏋️ | **Model Training** | Generates training configs, cost estimates, and full training scripts for any CV model/task. | ✅ Ready |
-| 📊 | **Data Visualization** | Generates matplotlib/plotly chart code and extracts metrics tables from papers. | ✅ Ready |
-| 📄→💻 | **Paper to Code** | Scaffolds complete PyTorch implementations from ArXiv papers — model, training loop, dataset class. | ✅ Ready |
+| 🏋️ | **Model Training** | Generates training configs, cost estimates, and full training scripts. | ✅ Ready |
+| 📊 | **Data Visualization** | Generates matplotlib/plotly chart code from metrics and papers. | ✅ Ready |
+| 📄→💻 | **Paper to Code** | Scaffolds complete PyTorch implementations from ArXiv papers. | ✅ Ready |
 
 Each agent is accessible via:
-- **Web UI** — select the agent from the sidebar
-- **WebSocket** — `ws://localhost:8420/ws/agent/<id>` (e.g. `blog_writer`, `paper_to_code`)
-- **REST** — `GET /api/agents` lists all agents; `GET /api/agents/<id>` returns agent details
-- **Main agent delegation** — the main agent auto-delegates tasks using `delegate_<agent>` tools
+- **Web UI** — select from the sidebar Agents view
+- **WebSocket** — `ws://localhost:8420/ws/agent/<id>`
+- **REST** — `GET /api/agents` lists all; `GET /api/agents/<id>` returns details
+- **Main agent delegation** — the main agent auto-delegates via `delegate_<agent>` tools
 
-Per-agent model overrides: set `BLOG_WRITER_MODEL`, `WEBSITE_AGENT_MODEL`, `TRAINING_AGENT_MODEL`, `VIZ_AGENT_MODEL`, or `PAPER_TO_CODE_MODEL` in `.env` to use a different model for a specific agent.
+Per-agent model overrides: set `BLOG_WRITER_MODEL`, `WEBSITE_AGENT_MODEL`, `TRAINING_AGENT_MODEL`, `VIZ_AGENT_MODEL`, or `PAPER_TO_CODE_MODEL` in `.env`.
 
 ---
 
@@ -184,28 +274,26 @@ Per-agent model overrides: set `BLOG_WRITER_MODEL`, `WEBSITE_AGENT_MODEL`, `TRAI
 | 📁 | Local File System | ✅ Active | `file_read`, `file_write`, `shell` via ZeroClaw |
 | 📚 | ArXiv | ✅ Active | Free public API — no key required |
 | 🔬 | Semantic Scholar | ⚠️ Limited | Rate-limited; set `SEMANTIC_SCHOLAR_API_KEY` for full access |
-| 🖼️ | 2D Image Processing | ✅ Active | Pillow + OpenCV; unlocks Object Detection, Tracking, Segmentation skills |
-| 🧊 | 3D Image Processing | 📦 Install | Requires `open3d`; `pip install open3d` |
+| 🖼️ | 2D Image Processing | ✅ Active | Pillow + OpenCV |
+| 🧊 | 3D Image Processing | 📦 Install | Requires `open3d` |
 
 ### 🔗 Integrations (configure in Powers view)
 
-| Icon | Power | Status | Env Var |
-|------|-------|--------|---------|
-| 📧 | Email (SMTP) | Inactive | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` |
-| 🤗 | HuggingFace Hub | Inactive | `HF_TOKEN` |
-| 🏆 | Kaggle | Inactive | `KAGGLE_USERNAME`, `KAGGLE_KEY` |
-| 🐙 | GitHub | Inactive | `GITHUB_TOKEN` |
-| 🔤 | OCR | Inactive | `OCR_ENGINE` (`tesseract`, `easyocr`, or `monkeyocr`); unlocks Document Text Extraction skill |
-| 🎬 | Vid-LLMs | Inactive | `VID_LLM_MODEL` (e.g. `video-llava`, `internvl2`); unlocks Video Understanding skill |
+| Icon | Power | Env Var | Unlocks |
+|------|-------|---------|---------|
+| 📧 | Email (SMTP) | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` | Email Reports skill |
+| 🤗 | HuggingFace Hub | `HF_TOKEN` | Gated model downloads (SAM 3, DeepGen), dataset search |
+| 🏆 | Kaggle | `KAGGLE_USERNAME`, `KAGGLE_KEY` | Kaggle Competition skill, Kaggle dataset search |
+| 🐙 | GitHub | `GITHUB_TOKEN` | GitHub repo access |
+| 🔤 | OCR | `OCR_ENGINE` | Document Text Extraction skill |
+| 🎬 | Vid-LLMs | `VID_LLM_MODEL` | Video Understanding skill |
 
 ### ☁️ Cloud Compute
 
-| Icon | Power | Status | Env Var |
-|------|-------|--------|---------|
-| ☁️ | Azure ML | Inactive | `AZURE_SUBSCRIPTION_ID`, `AZURE_ML_WORKSPACE` |
-| 🚀 | RunPod | Inactive | `RUNPOD_API_KEY` |
-
-All powers are configurable directly from the **Powers** view in the UI — no manual `.env` editing required.
+| Icon | Power | Env Var |
+|------|-------|---------|
+| ☁️ | Azure ML | `AZURE_SUBSCRIPTION_ID`, `AZURE_ML_WORKSPACE` |
+| 🚀 | RunPod | `RUNPOD_API_KEY` |
 
 ---
 
@@ -252,26 +340,21 @@ cd ComputerVision-Assistant
 python -m venv .venv
 source .venv/bin/activate
 
-# Install the agent + ZeroClaw shim dependencies (LangChain, LangGraph, etc.)
 pip install -e ".[dev]"
-
-# Optional: install ZeroClaw when it ships on PyPI (shim is used until then)
-# pip install zeroclaw-tools
 
 cp .env.example .env   # add API keys
 ```
 
-> **ZeroClaw shim:** `zeroclaw-tools` is not yet on PyPI. The repo ships a local compatibility shim at `src/zeroclaw_tools/` that provides the identical `@tool` / `create_agent` API via LangChain + LangGraph. `pip install -e ".[dev]"` installs all shim dependencies automatically. Once the real package is published, replace it with `pip install zeroclaw-tools` and delete the `src/zeroclaw_tools/` directory — no other changes needed.
+> **ZeroClaw shim:** `zeroclaw-tools` is not yet on PyPI. The repo ships a local compatibility shim at `src/zeroclaw_tools/` that provides the identical `@tool` / `create_agent` API via LangChain + LangGraph. Once the real package is published, replace with `pip install zeroclaw-tools` and delete `src/zeroclaw_tools/`.
 
 ### Launch
 
 ```bash
-# Web UI — chat + model management + skills/powers dashboard
 source .venv/bin/activate
 cv-agent ui
 # → http://127.0.0.1:8420
 
-# Or start directly with uvicorn
+# Or with uvicorn directly
 uvicorn cv_agent.web:create_app --factory --host 127.0.0.1 --port 8420 --app-dir src
 ```
 
@@ -293,38 +376,90 @@ cv-agent knowledge sync                            # sync knowledge graph
 CV_Zero_Claw_Agent/
 ├── src/
 │   ├── cv_agent/
-│   │   ├── agent.py              # Agent orchestrator + LangGraph ReAct loop
-│   │   ├── cli.py                # Click CLI entry point
-│   │   ├── web.py                # FastAPI server + all API endpoints
-│   │   ├── config.py             # Pydantic config (AgentConfig, LlmfitConfig)
+│   │   ├── agent.py                  # Agent orchestrator + LangGraph ReAct loop
+│   │   ├── cli.py                    # Click CLI entry point
+│   │   ├── web.py                    # FastAPI server + all API endpoints
+│   │   ├── config.py                 # Pydantic config (AgentConfig, LlmfitConfig)
+│   │   ├── local_model_manager.py    # HF model catalog, download (SSE), delete
+│   │   ├── dataset_manager.py        # Dataset catalog, HF download (SSE), delete
+│   │   ├── server_manager.py         # Local inference server start/stop/health
 │   │   ├── ui/
-│   │   │   ├── index.html        # 15-view SPA shell
-│   │   │   ├── style.css         # Dark theme (GitHub-inspired)
-│   │   │   └── app.js            # View routing, chat WS, all loaders
+│   │   │   ├── index.html            # 15-view SPA shell
+│   │   │   ├── style.css             # Dark theme (GitHub-inspired)
+│   │   │   └── app.js                # View routing, chat WS, all loaders
+│   │   ├── servers/
+│   │   │   ├── img_gen.py            # Image generation server stub (FastAPI :7860)
+│   │   │   └── ocr_server.py         # OCR server stub (FastAPI :7861)
 │   │   ├── tools/
-│   │   │   ├── vision.py         # Ollama vision tools
-│   │   │   ├── mlx_vision.py     # MLX-accelerated vision (Apple Silicon)
-│   │   │   ├── paper_fetch.py    # ArXiv / paper fetching
+│   │   │   ├── vision.py             # Ollama vision tools
+│   │   │   ├── mlx_vision.py         # MLX-accelerated vision (Apple Silicon)
+│   │   │   ├── paper_fetch.py        # ArXiv / paper fetching
 │   │   │   ├── equation_extract.py   # LaTeX equation extraction
 │   │   │   ├── knowledge_graph.py    # Obsidian knowledge graph
 │   │   │   ├── spec_generator.py     # Paper → spec.md pipeline
 │   │   │   ├── hardware_probe.py     # llmfit integration + Ollama management
 │   │   │   └── remote.py             # Telegram / Discord / messaging
 │   │   ├── research/
-│   │   │   ├── monitor.py        # Source monitoring scheduler
-│   │   │   ├── digest.py         # Weekly digest generator
-│   │   │   └── sources.py        # ArXiv / PWC / Semantic Scholar config
+│   │   │   ├── monitor.py            # Source monitoring scheduler
+│   │   │   ├── digest.py             # Weekly digest generator
+│   │   │   └── sources.py            # ArXiv / PWC / Semantic Scholar config
 │   │   └── knowledge/
-│   │       ├── graph.py          # Graph core logic
-│   │       └── obsidian.py       # Obsidian vault writer
+│   │       ├── graph.py              # Graph core logic
+│   │       └── obsidian.py           # Obsidian vault writer
 │   └── zeroclaw_tools/
-│       └── __init__.py           # ZeroClaw shim (delete when PyPI pkg ships)
+│       └── __init__.py               # ZeroClaw shim (delete when PyPI pkg ships)
 ├── config/
-│   └── agent_config.yaml         # Full agent configuration
-├── vault/                        # Obsidian knowledge vault output
-├── output/                       # Generated specs and digests
-└── .env                          # Secrets (gitignored)
+│   └── agent_config.yaml             # Full agent configuration
+├── vault/                            # Obsidian knowledge vault output
+├── output/
+│   ├── .models/                      # Local HF model weights
+│   ├── .datasets/                    # Downloaded training datasets
+│   ├── fine-tuned/                   # Fine-tuning run outputs
+│   └── diagrams/                     # Text→Diagram outputs
+└── .env                              # Secrets (gitignored)
 ```
+
+---
+
+## API Reference
+
+### Models
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/local-models/catalog` | List all models with download status |
+| `POST` | `/api/local-models/{id}/download` | SSE stream — download model from HF Hub |
+| `DELETE` | `/api/local-models/{id}` | Delete local model files |
+| `GET` | `/api/local-servers` | List inference servers with health status |
+| `POST` | `/api/local-servers/{id}/start` | Start a managed server process |
+| `POST` | `/api/local-servers/{id}/stop` | Stop a managed server process |
+| `POST` | `/api/local-servers/{id}/restart` | Restart a managed server |
+| `PATCH` | `/api/local-servers/{id}` | Update device setting |
+
+### Datasets
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/datasets` | List catalog datasets with download status |
+| `GET` | `/api/datasets/search?q=&source=` | Search HuggingFace or Kaggle |
+| `POST` | `/api/datasets/{id}/download` | SSE stream — download dataset from HF Hub |
+| `POST` | `/api/datasets/add-external` | SSE stream — download any HF dataset by repo ID |
+| `DELETE` | `/api/datasets/{id}` | Delete local dataset files |
+
+### Jobs
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/cron` | List all scheduled and on-demand jobs |
+| `POST` | `/api/jobs/fine-tune/run` | SSE stream — run HuggingFace Trainer fine-tuning |
+
+### Skills & Powers
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/skills` | List all skills with status |
+| `GET` | `/api/powers` | List all powers with configuration status |
+| `POST` | `/api/powers/{id}/configure` | Save power credentials to `.env` |
 
 ---
 
@@ -335,13 +470,13 @@ CV_Zero_Claw_Agent/
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
-| `LLM_MODEL` | `minimax-m2.5:cloud` | LLM model tag |
-| `OLLAMA_VISION_MODEL` | `minimax-m2.5:cloud` | Vision model tag |
+| `LLM_MODEL` | `qwen3.5:latest` | LLM model tag |
+| `OLLAMA_VISION_MODEL` | `qwen3.5:latest` | Vision model tag |
 | `LLM_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible base URL |
+| `HF_TOKEN` | — | HuggingFace Hub token (required for gated models: SAM 3, DeepGen 1.0) |
 | `BRAVE_API_KEY` | — | Brave Search (upgrades web search quality) |
 | `SEMANTIC_SCHOLAR_API_KEY` | — | Removes rate limits on paper search |
-| `HF_TOKEN` | — | HuggingFace Hub access |
-| `KAGGLE_USERNAME` / `KAGGLE_KEY` | — | Kaggle competition tools |
+| `KAGGLE_USERNAME` / `KAGGLE_KEY` | — | Kaggle competition tools + dataset search |
 | `GITHUB_TOKEN` | — | GitHub repo access |
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` | — | Email power |
 | `VAULT_PATH` | `./vault` | Obsidian vault output path |
@@ -371,5 +506,6 @@ You are free to use, modify, and distribute this software for any purpose, inclu
 | [llmfit](https://github.com/AlexsJones/llmfit) | Apache 2.0 |
 | [MLX](https://github.com/ml-explore/mlx) | MIT |
 | [Pydantic](https://github.com/pydantic/pydantic) | MIT |
+| [HuggingFace Hub](https://github.com/huggingface/huggingface_hub) | Apache 2.0 |
 
-> **Model licenses** vary by provider. `minimax-m2.5:cloud` and other Ollama-served models are subject to their own upstream licenses. Check the model card on [Ollama Hub](https://ollama.com/library) before commercial use.
+> **Model licenses** vary by provider. Check the model card on [HuggingFace](https://huggingface.co) or [Ollama Hub](https://ollama.com/library) before commercial use.
