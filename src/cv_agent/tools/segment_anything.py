@@ -325,9 +325,47 @@ def _save_overlay(image_path: str, overlay_image) -> str:
 
 
 def _extract_masks_scores_boxes(output: dict) -> tuple[list, list, list]:
-    masks = output.get("masks", []) or []
-    scores = [float(s) for s in (output.get("scores") or [])]
-    boxes = output.get("boxes") or []
+    """Extract masks/scores/boxes from processor output.
+
+    Handles both PyTorch tensors and MLX arrays.
+    MLX returns batched arrays (e.g. scores shape [N], masks shape [N,1,H,W]);
+    we normalise everything to plain Python lists / numpy arrays.
+    """
+    import numpy as np
+
+    def _to_np(x):
+        if x is None:
+            return np.array([])
+        if hasattr(x, "cpu"):          # torch tensor
+            return x.cpu().numpy()
+        if hasattr(x, "__array__"):    # mlx array
+            return np.asarray(x)
+        return np.asarray(x)
+
+    raw_masks  = output.get("masks")
+    raw_scores = output.get("scores")
+    raw_boxes  = output.get("boxes")
+
+    # Scores → flat list of Python floats
+    scores: list[float] = []
+    if raw_scores is not None:
+        arr = _to_np(raw_scores).flatten()
+        scores = [float(v) for v in arr]
+
+    # Masks → list of 2-D/3-D numpy arrays (one per detection)
+    masks: list = []
+    if raw_masks is not None:
+        m = _to_np(raw_masks)       # shape [N, 1, H, W] or [N, H, W]
+        for i in range(m.shape[0]):
+            masks.append(m[i])
+
+    # Boxes → list of [x1,y1,x2,y2] lists
+    boxes: list = []
+    if raw_boxes is not None:
+        b = _to_np(raw_boxes)       # shape [N, 4]
+        for i in range(b.shape[0]):
+            boxes.append(b[i].tolist())
+
     return masks, scores, boxes
 
 
