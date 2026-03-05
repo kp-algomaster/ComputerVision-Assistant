@@ -2441,6 +2441,9 @@ function buildSkillCard(id, info) {
     if (id === 'segment_anything') {
         actions.push(`<button class="btn-sm" onclick="switchView('sam3')">Open Playground</button>`);
     }
+    if (info.view && id !== 'text_to_diagram' && id !== 'agentic_workflows' && id !== 'segment_anything') {
+        actions.push(`<button class="btn-sm" onclick="switchView('${info.view}')">Open</button>`);
+    }
     if (info.status !== 'ready') {
         actions.push(`<button class="btn-install-skill" onclick="showSkillInstallModal('${id}')">⚙ Install Skill</button>`);
     }
