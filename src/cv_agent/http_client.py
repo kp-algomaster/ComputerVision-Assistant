@@ -18,6 +18,7 @@ load_dotenv(_PROJECT_ROOT / ".env")
 _FALSEY = {"0", "false", "no", "off"}
 _TRUEY = {"1", "true", "yes", "on"}
 _warned_ssl_disabled = False
+_huggingface_hub_configured = False
 
 
 def _log_ssl_policy(verify: bool | str) -> None:
@@ -72,6 +73,57 @@ def create_async_httpx_client(**kwargs: Any) -> _httpx.AsyncClient:
     return _httpx.AsyncClient(**build_httpx_kwargs(**kwargs))
 
 
+def configure_huggingface_hub() -> bool:
+    """Register shared SSL-aware HTTP clients for huggingface_hub.
+
+    The Hub client uses its own global httpx clients, so this opt-in bridge keeps
+    Hugging Face dataset/model downloads aligned with `CV_SSL_VERIFY`.
+    """
+    global _huggingface_hub_configured
+
+    if _huggingface_hub_configured:
+        return True
+
+    try:
+        from huggingface_hub import set_async_client_factory, set_client_factory
+    except ImportError:
+        return False
+
+    try:
+        from huggingface_hub.utils._http import (
+            async_hf_request_event_hook,
+            async_hf_response_event_hook,
+            hf_request_event_hook,
+        )
+        sync_event_hooks: dict[str, list[Any]] = {"request": [hf_request_event_hook]}
+        async_event_hooks: dict[str, list[Any]] = {
+            "request": [async_hf_request_event_hook],
+            "response": [async_hf_response_event_hook],
+        }
+    except Exception:
+        sync_event_hooks = {}
+        async_event_hooks = {}
+
+    def _sync_factory() -> _httpx.Client:
+        return create_httpx_client(
+            event_hooks=sync_event_hooks,
+            follow_redirects=True,
+            timeout=None,
+        )
+
+    def _async_factory() -> _httpx.AsyncClient:
+        return create_async_httpx_client(
+            event_hooks=async_event_hooks,
+            follow_redirects=True,
+            timeout=None,
+        )
+
+    set_client_factory(_sync_factory)
+    set_async_client_factory(_async_factory)
+    _huggingface_hub_configured = True
+    return True
+
+
 class _HttpxProxy:
     """Small proxy that preserves the `httpx` API while injecting SSL settings."""
 
@@ -115,4 +167,5 @@ __all__ = [
     "build_httpx_kwargs",
     "create_httpx_client",
     "create_async_httpx_client",
+    "configure_huggingface_hub",
 ]

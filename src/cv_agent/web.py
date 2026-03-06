@@ -65,6 +65,66 @@ def _select_default_chat_model(
     return available_models[0] if available_models else ""
 
 
+def _persist_env_updates(env_path: Path, updates: dict[str, str]) -> None:
+    """Write environment updates to `.env`, creating the file when needed."""
+    if not updates:
+        return
+
+    lines = env_path.read_text().splitlines() if env_path.exists() else []
+    written: set[str] = set()
+    new_lines: list[str] = []
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in updates:
+                new_lines.append(f"{key}={updates[key]}")
+                written.add(key)
+                continue
+        new_lines.append(line)
+
+    for key, value in updates.items():
+        if key not in written:
+            new_lines.append(f"{key}={value}")
+
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    env_path.write_text("\n".join(new_lines) + "\n")
+
+
+def _persist_huggingface_token(token: str) -> bool:
+    """Persist the active HF token for clients that read Hub auth state directly."""
+    cleaned = token.strip()
+    if not cleaned:
+        return False
+
+    os.environ["HF_TOKEN"] = cleaned
+    os.environ["HUGGING_FACE_HUB_TOKEN"] = cleaned
+
+    try:
+        from huggingface_hub import constants as hf_constants
+    except ImportError:
+        return False
+
+    try:
+        token_path = Path(hf_constants.HF_TOKEN_PATH)
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text(cleaned)
+
+        # Keep a named token entry too so `hf auth list` can surface it.
+        try:
+            from huggingface_hub.utils import _auth as hf_auth
+
+            hf_auth._save_token(cleaned, "cv-agent")
+        except Exception:
+            logger.debug("Could not update stored HF token list", exc_info=True)
+
+        return True
+    except Exception:
+        logger.warning("Could not persist HF token to huggingface_hub cache", exc_info=True)
+        return False
+
+
 def create_app(config: AgentConfig | None = None) -> FastAPI:
     """Create the FastAPI application."""
     if config is None:
@@ -1880,32 +1940,20 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
     @app.post("/api/powers/{power_id}/configure")
     async def configure_power(power_id: str, body: dict):
         """Update credentials for a power. Persists to .env and refreshes os.environ from .env."""
-        from dotenv import load_dotenv as _load_dotenv, dotenv_values as _dotenv_values
+        from dotenv import load_dotenv as _load_dotenv
         fields: dict = body.get("fields", {})
         updates: dict[str, str] = {}
         for key, value in fields.items():
             v = str(value) if value is not None else ""
             if v and not v.startswith("••"):
                 os.environ[key] = v
+                if key == "HF_TOKEN":
+                    os.environ["HUGGING_FACE_HUB_TOKEN"] = v
                 updates[key] = v
         env_path = _PROJECT_ROOT / ".env"
-        if env_path.exists() and updates:
-            lines = env_path.read_text().splitlines()
-            written: set[str] = set()
-            new_lines = []
-            for line in lines:
-                stripped = line.strip()
-                if stripped and not stripped.startswith("#") and "=" in stripped:
-                    k = stripped.split("=", 1)[0].strip()
-                    if k in updates:
-                        new_lines.append(f"{k}={updates[k]}")
-                        written.add(k)
-                        continue
-                new_lines.append(line)
-            for k, v in updates.items():
-                if k not in written:
-                    new_lines.append(f"{k}={v}")
-            env_path.write_text("\n".join(new_lines) + "\n")
+        _persist_env_updates(env_path, updates)
+        if "HF_TOKEN" in updates:
+            _persist_huggingface_token(updates["HF_TOKEN"])
         # Re-load .env into os.environ so new values are visible immediately
         # (load_dotenv at import time won't pick up changes made after startup)
         _load_dotenv(env_path, override=True)
