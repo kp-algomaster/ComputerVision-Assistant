@@ -50,6 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPinnedNavItems();
     renderPinnedSkillNavItems();
     checkStatus();
+    // Prefetch skills so pinned nav items can route immediately on first click
+    fetch('/api/skills').then(r => r.json()).then(d => { _skillsById = d || {}; }).catch(() => {});
 });
 
 // ═══════════════════════════════════════════════════════════════════════
