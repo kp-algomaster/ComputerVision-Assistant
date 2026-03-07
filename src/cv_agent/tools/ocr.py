@@ -128,7 +128,10 @@ def run_ocr(
     if not Path(image_path).exists():
         return json.dumps({"error": f"File not found: {image_path}"})
 
-    ocr = _get_ocr(lang)
+    try:
+        ocr = _get_ocr(lang)
+    except Exception as exc:
+        return json.dumps({"error": f"OCR init failed: {exc}"})
     if ocr is None:
         return json.dumps({
             "error": "PaddleOCR not installed. Run: pip install paddleocr paddlepaddle"

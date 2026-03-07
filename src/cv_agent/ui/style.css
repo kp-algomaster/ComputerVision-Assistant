@@ -4262,7 +4262,8 @@ body {
 ══════════════════════════════════════════════ */
 
 /* Make view-scroll a flex column so children can fill height reliably */
-#view-sam3 .view-scroll {
+#view-sam3 .view-scroll,
+#view-ocr .view-scroll {
     padding: 0 !important;
     overflow: hidden !important;
     display: flex !important;

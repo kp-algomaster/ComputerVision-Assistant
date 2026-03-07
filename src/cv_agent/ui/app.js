@@ -4431,7 +4431,9 @@ async function _ocrRun() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image_path: _ocr.imagePath, lang }),
         });
-        const d = await resp.json();
+        let d;
+        const text = await resp.text();
+        try { d = JSON.parse(text); } catch { d = { error: text || `OCR request failed (HTTP ${resp.status})` }; }
         statEl.hidden = true;
         if (d.error) {
             errEl.textContent = '⚠️ ' + d.error;

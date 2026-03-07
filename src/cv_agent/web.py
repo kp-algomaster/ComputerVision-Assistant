@@ -2521,11 +2521,14 @@ def create_app(config: AgentConfig | None = None) -> FastAPI:
         if not _P(image_path).exists():
             return JSONResponse({"error": f"Image not found: {image_path}"}, status_code=404)
 
-        result_json = await asyncio.to_thread(
-            run_ocr.invoke,
-            {"image_path": image_path, "lang": lang, "render_overlay": True},
-        )
-        result = _json.loads(result_json)
+        try:
+            result_json = await asyncio.to_thread(
+                run_ocr.invoke,
+                {"image_path": image_path, "lang": lang, "render_overlay": True},
+            )
+            result = _json.loads(result_json)
+        except Exception as exc:
+            return JSONResponse({"error": f"OCR failed: {exc}"}, status_code=500)
         if "overlay_path" in result and result["overlay_path"]:
             result["overlay_url"] = "/" + result["overlay_path"].replace("\\", "/").lstrip("/")
         return JSONResponse(result)
